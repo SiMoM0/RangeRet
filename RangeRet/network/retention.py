@@ -6,10 +6,10 @@ from utils.xpos import XPOS
 
 class SimpleRetention(nn.Module):
     def __init__(self, hidden_size, gamma, head_size, double_v_dim):
-        """
+        '''
         Simple retention mechanism based on the paper
         "Retentive Network: A Successor to Transformer for Large Language Models"[https://arxiv.org/pdf/2307.08621.pdf]
-        """
+        '''
         super(SimpleRetention, self).__init__()
 
         self.hidden_size = hidden_size
@@ -18,18 +18,18 @@ class SimpleRetention(nn.Module):
         self.v_dim = head_size * 2 if double_v_dim else head_size
         self.gamma = gamma
 
-        self.W_Q = nn.Parameter(torch.randn(hidden_size, head_size) / hidden_size)
-        self.W_K = nn.Parameter(torch.randn(hidden_size, head_size) / hidden_size)
-        self.W_V = nn.Parameter(torch.randn(hidden_size, self.v_dim) / hidden_size)
+        self.W_Q = nn.Parameter(torch.randn(hidden_size, head_size) / hidden_size, requires_grad=True)
+        self.W_K = nn.Parameter(torch.randn(hidden_size, head_size) / hidden_size, requires_grad=True)
+        self.W_V = nn.Parameter(torch.randn(hidden_size, self.v_dim) / hidden_size, requires_grad=True)
         
         self.xpos = XPOS(head_size)
 
     def forward(self, x):
-        """
+        '''
         Parallel (default) representation of the retention mechanism.
         X: (batch_size=1?, number of patches, number of features) ex: (1, H*W/(p**2), 128)
         or (number of patches, pixels per patch, pixel features)  ex: (H*W/(p**2), 16, 128)
-        """
+        '''
         sequence_length = x.shape[1]
         D = self._get_D(sequence_length).to(self.W_Q.device)
 

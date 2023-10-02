@@ -123,10 +123,15 @@ def train_one_epoch(epoch_index, tb_writer):
         patches = image.extract_patches_2d(data[0], (4, 4), max_patches=4096)
         #print(patches.shape)
 
-        inputs = patches.reshape(patches.shape[0], patches.shape[1] * patches.shape[2], patches.shape[3])
+        inputs = patches.reshape(patches.shape[0], patches.shape[1] * patches.shape[2], patches.shape[3]) # shape = (4069, 16, 5)
         #print(inputs.shape)
 
         inputs = torch.from_numpy(inputs).to(device)
+
+        # for visionEmbedding
+        #inputs = torch.from_numpy(data[0]).to(device)
+        #inputs = inputs.reshape(1, 64, 1024, 5)
+        #inputs = inputs.permute(0, 3, 1, 2)
 
         optimizer.zero_grad()
 
@@ -144,8 +149,6 @@ def train_one_epoch(epoch_index, tb_writer):
 
         #print('predictions shape ', predictions.shape)
         #print('labels shape ', gt.shape)
-
-        # TODO set retnet output dimension to 20 as classes and use cross entropy
 
         loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
         loss.backward()
