@@ -32,11 +32,15 @@ learning_map = config['learning_map']
 range_images = []
 labels_images = []
 
+# range image size
+H = 64
+W = 1024
+C = 5
+# patch size
+patch_size = 4
+
 def project_scan(scan, labels):
     ### Create Range Image
-    H = 64
-    W = 1024
-
     fov_up = 3.0 / 180.0 * np.pi
     fov_down = -25 / 180.0 * np.pi
 
@@ -103,35 +107,37 @@ labels_images = np.array(labels_images, dtype=np.int64)
 
 labels_images = torch.from_numpy(labels_images).to(device)
 
-# print(range_images.shape)
+# convert to torch tensor
+range_images = torch.from_numpy(range_images)
+
+#print(range_images.shape)
 # print(labels_images.shape)
 
 print('Upload range images')
 
-model = RangeRet().to(device)
+model = RangeRet(H, W, patch_size, C).to(device)
 
-#loss_fn = nn.NLLLoss()
-loss_fn = nn.NLLLoss(ignore_index=0)
+loss_fn = nn.CrossEntropyLoss(ignore_index=0)
+#loss_fn = nn.NLLLoss(ignore_index=0)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, eps=1e-8)
+optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
+#optimizer = torch.optim.Adam(model.parameters(), lr=0.001, eps=1e-8)
 
 def train_one_epoch(epoch_index, tb_writer):
     running_loss = 0.
     last_loss = 0.
 
+    # confusion matrix
+    conf_matrix = np.zeros((20, 20), dtype=np.int64)
+
     for i, data in enumerate(zip(range_images, labels_images)):
-        patches = image.extract_patches_2d(data[0], (4, 4), max_patches=4096)
+        #patches = image.extract_patches_2d(data[0], (4, 4), max_patches=4096)
         #print(patches.shape)
 
-        inputs = patches.reshape(patches.shape[0], patches.shape[1] * patches.shape[2], patches.shape[3]) # shape = (4069, 16, 5)
+        #inputs = patches.reshape(patches.shape[0], patches.shape[1] * patches.shape[2], patches.shape[3]) # shape = (4069, 16, 5)
         #print(inputs.shape)
 
-        inputs = torch.from_numpy(inputs).to(device)
-
-        # for visionEmbedding
-        #inputs = torch.from_numpy(data[0]).to(device)
-        #inputs = inputs.reshape(1, 64, 1024, 5)
-        #inputs = inputs.permute(0, 3, 1, 2)
+        inputs = data[0].unsqueeze(0).to(device)
 
         optimizer.zero_grad()
 
@@ -140,17 +146,20 @@ def train_one_epoch(epoch_index, tb_writer):
         #print('outputs shape: ', outputs.shape)
         #print('labels shape: ', labels_images[i].shape)
 
-        outputs = outputs.reshape(1, 64, 1024, 20)
+        #outputs = outputs.reshape(1, 64, 1024, 20)
 
         predictions = outputs.permute(0, 3, 1, 2)
         gt = data[1].permute(2, 0, 1)
-        #print(torch.argmax(predictions, dim=1))
+
+        proj_argmax = torch.argmax(predictions, dim=1)
+        #print(proj_argmax)
         #print(gt)
 
         #print('predictions shape ', predictions.shape)
         #print('labels shape ', gt.shape)
 
-        loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
+        #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
+        loss = loss_fn(predictions, gt.cuda(non_blocking=True))
         loss.backward()
 
         optimizer.step()
@@ -158,7 +167,25 @@ def train_one_epoch(epoch_index, tb_writer):
         # Gather data and report
         running_loss += loss.item()
 
-    return loss
+        # populate confusion matrix
+        idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), gt.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+        np.add.at(conf_matrix, idxs, 1)
+
+    # print final predictions
+    # np.savetxt(f'pred{epoch_index}.txt', torch.argmax(predictions, dim=1).cpu().detach().numpy()[0], fmt="%d")
+
+    # clean stats
+    tp = np.diag(conf_matrix)
+    fp = conf_matrix.sum(axis=1) - tp
+    fn = conf_matrix.sum(axis=0) - tp
+
+    intersection = tp
+    union = tp + fp + fn + 1e-15
+
+    iou = intersection / union
+    iou_mean = (intersection / union).mean()
+
+    return loss, iou_mean
 
 epoch_number = 0
 
@@ -171,7 +198,7 @@ for epoch in range(EPOCHS):
 
     # Make sure gradient tracking is on, and do a pass over the data
     model.train(True)
-    avg_loss = train_one_epoch(epoch_number, None)
+    avg_loss, iou_mean = train_one_epoch(epoch_number, None)
 
 
     running_vloss = 0.0
@@ -187,6 +214,6 @@ for epoch in range(EPOCHS):
     #        vloss = loss_fn(voutputs, vlabels)
     #        running_vloss += vloss
 
-    print('LOSS train {} '.format(avg_loss))
+    print('LOSS train {} | mIoU = {:.2%}'.format(avg_loss, iou_mean))
 
     epoch_number += 1

@@ -4,18 +4,21 @@ import torch
 from torch import nn
 
 class VisionEmbedding(nn.Module):
-    """Image to Patch Embedding"""
+    '''
+    Image to Patch Embedding: create patches with a certain number of feature\n
+    ```input``` x of shape (B, C, H, W)
+    * B = batch size
+    * C = number of channels
+    * H = image height
+    * W = image width
+    \n
+    output patches of shape (B, P, F)
+    * B = batch size
+    * P = number of patches
+    * F = number of final features
+    '''
 
-    def __init__(
-        self,
-        H=64,
-        W=1024,
-        patch_size=16,
-        in_chans=3,
-        embed_dim=768,
-        contain_mask_token=False,
-        prepend_cls_token=False,
-    ):
+    def __init__(self, H=64, W=1024, patch_size=4, in_chans=5, embed_dim=128, contain_mask_token=False, prepend_cls_token=False):
         super().__init__()
         img_size = (H, W)
         patch_size = (patch_size, patch_size)
@@ -67,3 +70,12 @@ class VisionEmbedding(nn.Module):
             x = torch.cat((cls_tokens, x), dim=1)
 
         return x
+
+# vision patch embedding test
+if __name__ == '__main__':
+    vembed = VisionEmbedding()
+    image = torch.rand(1, 5, 64, 1024)
+    print(image.shape)
+
+    out = vembed(image)
+    print(out.shape)

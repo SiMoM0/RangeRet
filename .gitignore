@@ -1,2 +1,6 @@
 # pycache
 __pycache__/
+
+# predicitons
+predictions/
+pred*

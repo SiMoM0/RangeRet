@@ -12,8 +12,8 @@ class SimpleRetention(nn.Module):
         '''
         super(SimpleRetention, self).__init__()
 
-        self.hidden_size = hidden_size
-        self.head_size = head_size
+        self.hidden_size = hidden_size  # d_model
+        self.head_size = head_size      # d_head
 
         self.v_dim = head_size * 2 if double_v_dim else head_size
         self.gamma = gamma
@@ -26,9 +26,8 @@ class SimpleRetention(nn.Module):
 
     def forward(self, x):
         '''
-        Parallel (default) representation of the retention mechanism.
-        X: (batch_size=1?, number of patches, number of features) ex: (1, H*W/(p**2), 128)
-        or (number of patches, pixels per patch, pixel features)  ex: (H*W/(p**2), 16, 128)
+        Parallel (default) representation of the retention mechanism.\n
+        ```x```: (batch_size, number of patches, number of features) ex: (B, H*W/(p**2), 128)
         '''
         sequence_length = x.shape[1]
         D = self._get_D(sequence_length).to(self.W_Q.device)
