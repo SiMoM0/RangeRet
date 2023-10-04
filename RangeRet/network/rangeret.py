@@ -29,17 +29,17 @@ class REM(nn.Module):
         x: (H, W, in_dim) range image
         '''
         # TODO normalize data ?
-        x1 = self.mlp1(x)
-        x2 = self.gelu(x1)
-        x3 = self.mlp2(x2)
-        x4 = self.gelu(x3)
-        x5 = self.mlp3(x4)
-        out = self.gelu(x5)
+        x = self.mlp1(x)
+        x = self.gelu(x)
+        x = self.mlp2(x)
+        x = self.gelu(x)
+        x = self.mlp3(x)
+        x = self.gelu(x)
         # TODO add some batch normalization or dropout ?
 
         #out = self.bnorm(x3)
 
-        return out
+        return x
 
 class SemanticHead(nn.Module):
     '''
@@ -60,27 +60,47 @@ class SemanticHead(nn.Module):
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
 
-        x1 = self.mlp1(x)
-        x2 = self.gelu(x1)
-        x3 = self.mlp2(x2)
+        x = self.mlp1(x)
+        x = self.gelu(x)
+        x = self.mlp2(x)
         #out = self.softmax(x3) # TODO use softmax only for NLL
 
         # TODO add dropout or batchnorm ?
 
-        return x3
+        return x
 
 class RangeRet(nn.Module):
-    def __init__(self, H=64, W=1024, patch_size=4, in_dim=5, rem_dim=128):
+    def __init__(self, model_params: dict):
         super(RangeRet, self).__init__()
-        self.patched_image = (H//patch_size, W//patch_size)
-        self.rem = REM(in_dim, rem_dim)
-        self.viembed = VisionEmbedding(H, W, patch_size, rem_dim, rem_dim) # H, W, patch size, input channel, output features
+        self.H = model_params['H']
+        self.W = model_params['W']
+        self.patch_size = model_params['patch_size']
+        self.stride = model_params['stride']
+        self.in_dim = model_params['input_dims']
+        self.rem_dim = model_params['rem_dim']
+        self.decoder_dim = model_params['decoder_dim']
+
+        # retnet parameters
+        self.layers = model_params['retnet']['layers']
+        self.hidden_dim = model_params['retnet']['hidden_dim']
+        self.ffn_size = model_params['retnet']['ffn_size']
+        self.num_head = model_params['retnet']['num_head']
+        self.double_v_dim = model_params['retnet']['double_v_dim']
+
+        self.patched_image = (round((self.H - self.patch_size) / self.stride) + 1,
+                              round((self.W - self.patch_size) / self.stride) + 1)
+
+        print(self.patched_image)
+
+        self.rem = REM(self.in_dim, self.rem_dim)
+        self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
-        self.retnet = RetNet(4, 128, 256, 4, self.patched_image, double_v_dim=True) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, patched_image_h, patched_image_w, v_dim=double
+        self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, patched_image_h, patched_image_w, v_dim=double
         # TODO set 4 decoders as the number of stages for downsampling
-        self.head = SemanticHead(rem_dim, 64, 20)
+        self.head = SemanticHead(self.rem_dim, self.decoder_dim, 20)
     
     def forward(self, x):
+        # TODO for better performance dont use different vars
         rem_out = self.rem(x)
 
         # reshape to (B, C, H, W)

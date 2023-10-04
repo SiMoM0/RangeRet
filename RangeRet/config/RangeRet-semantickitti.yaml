@@ -1,0 +1,45 @@
+# Config format schema number
+format_version: 1
+
+###################
+## Model options
+model_params:
+  model_architecture: "rangeret"
+
+  H: 64                     # range iamge height
+  W: 1024                   # range image width
+
+  input_dims: 5             # range image features
+  patch_size: 4             # size of patch
+  stride: 4                 # stride (default 1 for full overlapping)
+
+  rem_dim: 128              # output feature from REM
+
+  retnet:
+    layers: 4               # number of blocks per stage
+    hidden_dim: 128         # input dimension
+    ffn_size: 256           # feed forward network dimension
+    num_head: 4             # number of heads per layer
+    double_v_dim: True      # double v dimension wrt hidden_size
+  
+  decoder_dim: 64              # semantic head hidden dimension
+
+###################
+## Dataset options
+dataset_params:
+  pc_dataset_type: "SemanticKITTI"
+  collate_type: "collate_fn_default"
+  ignore_label: 0
+  label_mapping: "./config/label_mapping/semantic-kitti.yaml"
+  num_classes: 20
+
+###################
+## Train params
+train_params:
+  max_num_epochs: 64
+  learning_rate: 1.0e-2
+  optimizer: SGD  # [SGD, Adam]
+  #lr_scheduler: CosineAnnealingWarmRestarts  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
+  #momentum: 0.9
+  #nesterov: True
+  #weight_decay: 1.0e-4

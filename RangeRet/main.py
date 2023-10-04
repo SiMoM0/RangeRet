@@ -1,4 +1,5 @@
 # main file
+# Usage python3 main.py <config_path> <data_path>
 
 import os
 import sys
@@ -21,23 +22,28 @@ def load_yaml(file_name):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # input data
-sequence_folder = sys.argv[1]
+config_path = sys.argv[1]
+sequence_folder = sys.argv[2]
 velodyne_folder = os.path.join(sequence_folder, 'velodyne')
 labels_folder = os.path.join(sequence_folder, 'labels')
 
 # config path (label mapping)
-config = load_yaml('./config/label_mapping/semantic-kitti.yaml')
-learning_map = config['learning_map']
+config = load_yaml(config_path)
+label_mapping = load_yaml(config['dataset_params']['label_mapping'])
+learning_map = label_mapping['learning_map']
+
+# model params
+model_params = config['model_params']
 
 range_images = []
 labels_images = []
 
 # range image size
-H = 64
-W = 1024
-C = 5
+H = config['model_params']['H']
+W = config['model_params']['W']
+C = config['model_params']['input_dims']
 # patch size
-patch_size = 4
+patch_size = config['model_params']['patch_size']
 
 def project_scan(scan, labels):
     ### Create Range Image
@@ -115,7 +121,7 @@ range_images = torch.from_numpy(range_images)
 
 print('Upload range images')
 
-model = RangeRet(H, W, patch_size, C).to(device)
+model = RangeRet(model_params).to(device)
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=0)
 #loss_fn = nn.NLLLoss(ignore_index=0)

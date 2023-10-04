@@ -43,19 +43,19 @@ class RetNet(nn.Module):
             for _ in range(layers)
         ])
     
-    def forward(self, X):
+    def forward(self, x):
         """
         X: (batch_size, number of patches, number of features)
         """
         for i in range(self.layers):
-            Y = self.retentions[i](self.layer_norms_1[i](X)) + X
+            y = self.retentions[i](self.layer_norms_1[i](x)) + x
 
-            X = self.ffns[i](self.layer_norms_2[i](Y)) + Y
+            x = self.ffns[i](self.layer_norms_2[i](y)) + y
 
         # reshape to patched image shape
-        out = torch.reshape(X, (X.shape[0], self.img_dim[0], self.img_dim[1], X.shape[2]))
+        x = torch.reshape(x, (x.shape[0], self.img_dim[0], self.img_dim[1], x.shape[2]))
 
-        return out
+        return x
 
     def forward_recurrent(self, x_n, s_n_1s, n):
         """
