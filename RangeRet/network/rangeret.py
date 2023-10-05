@@ -45,18 +45,37 @@ class SemanticHead(nn.Module):
     '''
     Semantic Head: two MLP layers to map feature dimension into number of classes
     '''
-    def __init__(self, in_dim, hidden_dim, num_classes):
+    def __init__(self, in_dim, hidden_dim, height, width, num_classes):
         super(SemanticHead, self).__init__()
+        self.height = height
+        self.width = width
+
         self.mlp1 = nn.Linear(in_dim, hidden_dim)
         self.gelu = nn.GELU()
         self.mlp2 = nn.Linear(hidden_dim, num_classes)
         #self.softmax = nn.Softmax(-1)
 
+        #self.deconv = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+        #self.deconv2 = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+
+        #self.conv1 = nn.Conv2d(in_dim, hidden_dim, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        #self.conv2 = nn.Conv2d(hidden_dim, num_classes, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+
     def forward(self, x):
         # reshape to (B, C, H, W)
         x = x.permute(0, 3, 1, 2)
         # bilinear interpolation
-        x = torch.nn.functional.interpolate(x, size=(64, 1024), mode='bilinear')
+        x = torch.nn.functional.interpolate(x, size=(self.height, self.width), mode='bilinear')
+        
+        # deconv approach
+        #x = self.deconv(x)
+        #print(x.shape)
+        #x = self.deconv(x)
+        #print(x.shape)
+        
+        #x = self.conv1(x)
+        #x = self.conv2(x)
+
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
 
@@ -97,7 +116,7 @@ class RangeRet(nn.Module):
         # TODO add 4 stages of RetNet with different downsampling
         self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, patched_image_h, patched_image_w, v_dim=double
         # TODO set 4 decoders as the number of stages for downsampling
-        self.head = SemanticHead(self.rem_dim, self.decoder_dim, 20)
+        self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
     
     def forward(self, x):
         # TODO for better performance dont use different vars

@@ -7,7 +7,8 @@ import yaml
 import torch
 import numpy as np
 from torch import nn
-from sklearn.feature_extraction import image
+
+from dataloader.kitti.parser import Parser
 
 from network.rangeret import RangeRet
 
@@ -23,103 +24,30 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # input data
 config_path = sys.argv[1]
-sequence_folder = sys.argv[2]
-velodyne_folder = os.path.join(sequence_folder, 'velodyne')
-labels_folder = os.path.join(sequence_folder, 'labels')
+dataset_folder = sys.argv[2]
 
 # config path (label mapping)
 config = load_yaml(config_path)
-label_mapping = load_yaml(config['dataset_params']['label_mapping'])
-learning_map = label_mapping['learning_map']
+data_config = load_yaml(config['dataset_params']['data_config'])
 
 # model params
 model_params = config['model_params']
 
-range_images = []
-labels_images = []
-
-# range image size
-H = config['model_params']['H']
-W = config['model_params']['W']
-C = config['model_params']['input_dims']
-# patch size
-patch_size = config['model_params']['patch_size']
-
-def project_scan(scan, labels):
-    ### Create Range Image
-    fov_up = 3.0 / 180.0 * np.pi
-    fov_down = -25 / 180.0 * np.pi
-
-    # range image with (x, y, z, depth, remission) features
-    range_image = np.zeros((H, W, 5), np.float32)
-    label_image = np.zeros((H, W, 1), np.uint32)
-
-    # Compute the range of the point cloud
-    r = np.sqrt(np.sum(np.power(scan[:, :3], 2), axis=1))
-
-    # Compute the polar and azimuthal angles of the points
-    pitch = np.arcsin(scan[:, 2] / r)
-    yaw = np.arctan2(scan[:, 1], scan[:, 0])
-
-    fov = fov_up + np.abs(fov_down)
-
-    # create range image
-    for i, p in enumerate(scan):
-        # print(pitch[i], fov_down, fov)
-        u = H * (1 - ((pitch[i] + np.abs(fov_down)) / fov))
-        v = W * (0.5 * ((yaw[i] / (np.pi / 2)) + 1.0))
-
-        # round to the nearest integer
-        u = int(np.round(min(u, H - 1)))
-        v = int(np.round(min(v, W - 1)))
-
-        u = max(0, u)
-        v = max(0, v)
-
-        # print(u, v)
-
-        # range image
-        range_image[u, v, :4] = p
-        range_image[u, v, 4] = r[i]
-
-        # label image
-        label_image[u, v] = labels[i]
-    
-    return range_image, label_image
-
-for file in os.listdir(velodyne_folder):
-    scan_file = os.path.join(velodyne_folder, file)
-    scan = np.fromfile(scan_file, dtype=np.float32)
-    scan = scan.reshape((-1, 4))
-    #print(f'Number of points in sample scan: {scan.shape[0]}')
-
-    # read labels
-    label_file = os.path.join(labels_folder, file.replace('bin', 'label'))
-    labels = np.fromfile(label_file, dtype=np.uint32)
-    labels = labels.reshape(-1)
-    #print(f'Number of labels in scan: {labels.shape[0]}')
-    labels = labels & 0xFFFF
-    labels = np.vectorize(learning_map.__getitem__)(labels)
-
-    assert scan.shape[0] == labels.shape[0], 'Different number of points'
-
-    range_proj, label_proj = project_scan(scan, labels)
-
-    range_images.append(range_proj)
-    labels_images.append(label_proj)
-
-range_images = np.array(range_images)
-labels_images = np.array(labels_images, dtype=np.int64)
-
-labels_images = torch.from_numpy(labels_images).to(device)
-
-# convert to torch tensor
-range_images = torch.from_numpy(range_images)
-
-#print(range_images.shape)
-# print(labels_images.shape)
-
-print('Upload range images')
+# get data
+parser = Parser(root=dataset_folder,
+                train_sequences=data_config["split"]["train"],
+                valid_sequences=data_config["split"]["valid"],
+                test_sequences=None,
+                labels=data_config["labels"],
+                color_map=data_config["color_map"],
+                learning_map=data_config["learning_map"],
+                learning_map_inv=data_config["learning_map_inv"],
+                sensor=config["dataset_params"]["sensor"],
+                max_points=config["dataset_params"]["max_points"],
+                batch_size=config["train_params"]["batch_size"],
+                workers=config["train_params"]["workers"],
+                gt=True,
+                shuffle_train=True)
 
 model = RangeRet(model_params).to(device)
 
@@ -129,43 +57,53 @@ loss_fn = nn.CrossEntropyLoss(ignore_index=0)
 optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
 #optimizer = torch.optim.Adam(model.parameters(), lr=0.001, eps=1e-8)
 
-def train_one_epoch(epoch_index, tb_writer):
+def train_one_epoch(train_loader, epoch_index):
     running_loss = 0.
-    last_loss = 0.
 
     # confusion matrix
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
-    for i, data in enumerate(zip(range_images, labels_images)):
+    #for i, data in enumerate(zip(range_images, labels_images)):
+    for i, (in_vol, _, proj_labels, _, path_seq, path_name, _, _, _, _, _, _, _, _, _) in enumerate(train_loader):
         #patches = image.extract_patches_2d(data[0], (4, 4), max_patches=4096)
         #print(patches.shape)
 
         #inputs = patches.reshape(patches.shape[0], patches.shape[1] * patches.shape[2], patches.shape[3]) # shape = (4069, 16, 5)
         #print(inputs.shape)
 
-        inputs = data[0].unsqueeze(0).to(device)
+        #inputs = data[0].unsqueeze(0).to(device)
 
         optimizer.zero_grad()
 
-        outputs = model(inputs)
+        in_vol = in_vol.cuda()
+        proj_labels = proj_labels.cuda()
+
+        #print(in_vol) # (B, H, W, C)
+
+        outputs = model(in_vol) # input format (B, H, W, C)
 
         #print('outputs shape: ', outputs.shape)
         #print('labels shape: ', labels_images[i].shape)
 
         #outputs = outputs.reshape(1, 64, 1024, 20)
 
+        #print(proj_labels.shape) # (B, H, W)
+
         predictions = outputs.permute(0, 3, 1, 2)
-        gt = data[1].permute(2, 0, 1)
+        #gt = proj_labels.permute(2, 0, 1)
 
         proj_argmax = torch.argmax(predictions, dim=1)
         #print(proj_argmax)
-        #print(gt)
+        #print(proj_labels)
+
+        np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
+        #np.savetxt('labels.txt', proj_labels[0].cpu().detach().numpy(), fmt='%d')
 
         #print('predictions shape ', predictions.shape)
         #print('labels shape ', gt.shape)
 
         #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
-        loss = loss_fn(predictions, gt.cuda(non_blocking=True))
+        loss = loss_fn(predictions, proj_labels.cuda(non_blocking=True).long())
         loss.backward()
 
         optimizer.step()
@@ -174,7 +112,7 @@ def train_one_epoch(epoch_index, tb_writer):
         running_loss += loss.item()
 
         # populate confusion matrix
-        idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), gt.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+        idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
         np.add.at(conf_matrix, idxs, 1)
 
     # print final predictions
@@ -191,11 +129,11 @@ def train_one_epoch(epoch_index, tb_writer):
     iou = intersection / union
     iou_mean = (intersection / union).mean()
 
-    return loss, iou_mean
+    return running_loss, iou_mean
 
 epoch_number = 0
 
-EPOCHS = 50
+EPOCHS = config['train_params']['num_epochs']
 
 best_vloss = 1_000_000.
 
@@ -204,13 +142,13 @@ for epoch in range(EPOCHS):
 
     # Make sure gradient tracking is on, and do a pass over the data
     model.train(True)
-    avg_loss, iou_mean = train_one_epoch(epoch_number, None)
+    avg_loss, iou_mean = train_one_epoch(train_loader=parser.get_train_set(), epoch_index=epoch_number)
 
 
     running_vloss = 0.0
     # Set the model to evaluation mode, disabling dropout and using population
     # statistics for batch normalization.
-    model.eval()
+    #model.eval()
 
     # Disable gradient computation and reduce memory consumption.
     #with torch.no_grad():
