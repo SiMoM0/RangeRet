@@ -5,7 +5,7 @@ from torch import nn
 from utils.xpos import XPOS
 
 class SimpleRetention(nn.Module):
-    def __init__(self, hidden_size, gamma, head_size, double_v_dim):
+    def __init__(self, hidden_size, gamma, head_size, double_v_dim, num_patches):
         '''
         Simple retention mechanism based on the paper
         "Retentive Network: A Successor to Transformer for Large Language Models"[https://arxiv.org/pdf/2307.08621.pdf]
@@ -22,6 +22,8 @@ class SimpleRetention(nn.Module):
         self.W_K = nn.Parameter(torch.randn(hidden_size, head_size) / hidden_size, requires_grad=True)
         self.W_V = nn.Parameter(torch.randn(hidden_size, self.v_dim) / hidden_size, requires_grad=True)
         
+        self.D = self._get_D(num_patches).cuda()
+
         self.xpos = XPOS(head_size)
 
     def forward(self, x):
@@ -29,8 +31,8 @@ class SimpleRetention(nn.Module):
         Parallel (default) representation of the retention mechanism.\n
         ```x```: (batch_size, number of patches, number of features) ex: (B, H*W/(p**2), 128)
         '''
-        sequence_length = x.shape[1]
-        D = self._get_D(sequence_length).to(self.W_Q.device)
+        #sequence_length = x.shape[1]
+        #D = self._get_D(sequence_length).to(self.W_Q.device)
 
         Q = (x @ self.W_Q)
         K = (x @ self.W_K)
@@ -39,7 +41,7 @@ class SimpleRetention(nn.Module):
         K = self.xpos(K, downscale=True)
 
         V = x @ self.W_V
-        ret = (Q @ K.permute(0, 2, 1)) * D.unsqueeze(0)
+        ret = (Q @ K.permute(0, 2, 1)) * self.D.unsqueeze(0)
         
         return ret @ V
         
@@ -109,7 +111,7 @@ class SimpleRetention(nn.Module):
         return D
 
 class MultiScaleRetention(nn.Module):
-    def __init__(self, hidden_size, heads, double_v_dim):
+    def __init__(self, hidden_size, heads, double_v_dim, num_patches):
         """
         Multi-scale retention mechanism based on the paper
         "Retentive Network: A Successor to Transformer for Large Language Models"[https://arxiv.org/pdf/2307.08621.pdf]
@@ -130,7 +132,7 @@ class MultiScaleRetention(nn.Module):
         self.group_norm = nn.GroupNorm(heads, self.v_dim)
 
         self.retentions = nn.ModuleList([
-            SimpleRetention(self.hidden_size, gamma, self.head_size, double_v_dim) for gamma in self.gammas
+            SimpleRetention(self.hidden_size, gamma, self.head_size, double_v_dim, num_patches) for gamma in self.gammas
         ])
 
     def forward(self, x):

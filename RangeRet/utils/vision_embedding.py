@@ -18,7 +18,7 @@ class VisionEmbedding(nn.Module):
     * F = number of final features
     '''
 
-    def __init__(self, H=64, W=1024, patch_size=4, in_chans=5, embed_dim=128, stride=1, contain_mask_token=False, prepend_cls_token=False):
+    def __init__(self, H=64, W=1024, patch_size=4, in_chans=5, embed_dim=128, stride=1):
         super().__init__()
         img_size = (H, W)
         patch_size = (patch_size, patch_size)
@@ -29,24 +29,10 @@ class VisionEmbedding(nn.Module):
         self.num_patches = num_patches
 
         self.proj = nn.Conv2d(
-            in_chans, embed_dim, kernel_size=patch_size, stride=stride
+            in_chans, embed_dim, kernel_size=patch_size, stride=stride#, padding=(patch_size[0] // 2, patch_size[1] // 2)
         )
 
-        if contain_mask_token:
-            self.mask_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        else:
-            self.mask_token = None
-
-        if prepend_cls_token:
-            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        else:
-            self.cls_token = None
-
-    def num_position_embeddings(self):
-        if self.cls_token is None:
-            return self.num_patches
-        else:
-            return self.num_patches + 1
+        self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x, masked_position=None, **kwargs):
         B, C, H, W = x.shape
@@ -54,20 +40,7 @@ class VisionEmbedding(nn.Module):
             H == self.img_size[0] and W == self.img_size[1]
         ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
         x = self.proj(x).flatten(2).transpose(1, 2)
-
-        batch_size, seq_len, _ = x.size()
-
-        if masked_position is not None:
-            assert self.mask_token is not None
-            mask_token = self.mask_token.expand(batch_size, seq_len, -1)
-            w = masked_position.unsqueeze(-1).type_as(mask_token)
-            x = x * (1 - w) + mask_token * w
-
-        if self.cls_token is not None:
-            cls_tokens = self.cls_token.expand(
-                batch_size, -1, -1
-            )  # stole cls_tokens impl from Phil Wang, thanks
-            x = torch.cat((cls_tokens, x), dim=1)
+        x = self.norm(x)
 
         return x
 

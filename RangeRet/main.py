@@ -1,12 +1,17 @@
 # main file
 # Usage python3 main.py <config_path> <data_path>
 
+# profiler
+import pstats
+import cProfile
+
 import os
 import sys
 import yaml
 import torch
 import numpy as np
 from torch import nn
+from tqdm import tqdm
 
 from dataloader.kitti.parser import Parser
 
@@ -51,6 +56,7 @@ parser = Parser(root=dataset_folder,
 
 model = RangeRet(model_params).to(device)
 
+# TODO use focal loss, lovasz loss
 loss_fn = nn.CrossEntropyLoss(ignore_index=0)
 #loss_fn = nn.NLLLoss(ignore_index=0)
 
@@ -64,7 +70,7 @@ def train_one_epoch(train_loader, epoch_index):
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
     #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, _, path_seq, path_name, _, _, _, _, _, _, _, _, _) in enumerate(train_loader):
+    for i, (in_vol, _, proj_labels, _, path_seq, path_name, _, _, _, _, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
         #patches = image.extract_patches_2d(data[0], (4, 4), max_patches=4096)
         #print(patches.shape)
 
@@ -142,6 +148,11 @@ for epoch in range(EPOCHS):
 
     # Make sure gradient tracking is on, and do a pass over the data
     model.train(True)
+
+    #cProfile.run("train_one_epoch(train_loader=parser.get_train_set(), epoch_index=epoch_number)", "my_func_stats")
+    #p = pstats.Stats("my_func_stats")
+    #p.sort_stats("cumulative").print_stats()
+    
     avg_loss, iou_mean = train_one_epoch(train_loader=parser.get_train_set(), epoch_index=epoch_number)
 
 

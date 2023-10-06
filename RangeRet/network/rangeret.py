@@ -1,5 +1,6 @@
 # main model RangeRet
 
+import math
 import torch
 from torch import nn
 
@@ -20,9 +21,10 @@ class REM(nn.Module):
         self.mlp1 = nn.Linear(in_dim, 32)
         self.mlp2 = nn.Linear(32, 64)
         self.mlp3 = nn.Linear(64, out_dim)
-        #self.bnorm = nn.BatchNorm1d(out_dim)
 
         self.gelu = nn.GELU()
+
+        self.norm = nn.LayerNorm(out_dim)
 
     def forward(self, x):
         '''
@@ -35,9 +37,8 @@ class REM(nn.Module):
         x = self.gelu(x)
         x = self.mlp3(x)
         x = self.gelu(x)
+        x = self.norm(x)
         # TODO add some batch normalization or dropout ?
-
-        #out = self.bnorm(x3)
 
         return x
 
@@ -65,6 +66,7 @@ class SemanticHead(nn.Module):
         # reshape to (B, C, H, W)
         x = x.permute(0, 3, 1, 2)
         # bilinear interpolation
+        # TODO refactor if batch size is greater than 1
         x = torch.nn.functional.interpolate(x, size=(self.height, self.width), mode='bilinear')
         
         # deconv approach
@@ -106,15 +108,15 @@ class RangeRet(nn.Module):
         self.num_head = model_params['retnet']['num_head']
         self.double_v_dim = model_params['retnet']['double_v_dim']
 
-        self.patched_image = (round((self.H - self.patch_size) / self.stride) + 1,
-                              round((self.W - self.patch_size) / self.stride) + 1)
+        self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
+                              math.floor((self.W - self.patch_size) / self.stride) + 1)
 
-        print(self.patched_image)
+        print(f'Patched image size = {self.patched_image}')
 
         self.rem = REM(self.in_dim, self.rem_dim)
         self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
-        self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, patched_image_h, patched_image_w, v_dim=double
+        self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
         # TODO set 4 decoders as the number of stages for downsampling
         self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
     

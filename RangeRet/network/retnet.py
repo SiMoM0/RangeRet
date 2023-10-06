@@ -13,17 +13,16 @@ class RetNet(nn.Module):
     * heads: number of heads
     * img_dim: shape of input image
     '''
-    def __init__(self, layers, hidden_dim, ffn_size, heads, img_dim, double_v_dim=False):
+    def __init__(self, layers, hidden_dim, ffn_size, heads, img_dim, double_v_dim=True):
         super(RetNet, self).__init__()
         self.layers = layers
         self.hidden_dim = hidden_dim
         self.ffn_size = ffn_size
         self.heads = heads
-        self.v_dim = hidden_dim * 2 if double_v_dim else hidden_dim
         self.img_dim = img_dim
 
         self.retentions = nn.ModuleList([
-            MultiScaleRetention(hidden_dim, heads, self.v_dim)
+            MultiScaleRetention(hidden_dim, heads, double_v_dim, img_dim[0] * img_dim[1])
             for _ in range(layers)
         ])
         self.ffns = nn.ModuleList([

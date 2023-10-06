@@ -7,3 +7,6 @@ pred*
 
 # environment
 env/
+
+# profiler
+profiler*
