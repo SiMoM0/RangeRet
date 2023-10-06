@@ -71,13 +71,6 @@ def train_one_epoch(train_loader, epoch_index):
 
     #for i, data in enumerate(zip(range_images, labels_images)):
     for i, (in_vol, _, proj_labels, _, path_seq, path_name, _, _, _, _, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
-        #patches = image.extract_patches_2d(data[0], (4, 4), max_patches=4096)
-        #print(patches.shape)
-
-        #inputs = patches.reshape(patches.shape[0], patches.shape[1] * patches.shape[2], patches.shape[3]) # shape = (4069, 16, 5)
-        #print(inputs.shape)
-
-        #inputs = data[0].unsqueeze(0).to(device)
 
         optimizer.zero_grad()
 
@@ -91,18 +84,16 @@ def train_one_epoch(train_loader, epoch_index):
         #print('outputs shape: ', outputs.shape)
         #print('labels shape: ', labels_images[i].shape)
 
-        #outputs = outputs.reshape(1, 64, 1024, 20)
-
         #print(proj_labels.shape) # (B, H, W)
 
         predictions = outputs.permute(0, 3, 1, 2)
         #gt = proj_labels.permute(2, 0, 1)
 
-        proj_argmax = torch.argmax(predictions, dim=1)
+        proj_argmax = predictions[0].argmax(dim=0)
         #print(proj_argmax)
         #print(proj_labels)
 
-        np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
+        #np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
         #np.savetxt('labels.txt', proj_labels[0].cpu().detach().numpy(), fmt='%d')
 
         #print('predictions shape ', predictions.shape)
@@ -121,6 +112,13 @@ def train_one_epoch(train_loader, epoch_index):
         idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
         np.add.at(conf_matrix, idxs, 1)
 
+        # TODO put in original pointcloud using indexes and compute loss between whole point cloud labels 
+        #unproj_argmax = proj_argmax[p_y, p_x]
+        #print(unproj_argmax.shape)
+
+        #pred_np = unproj_argmax.cpu().detach().numpy()
+        #pred_np = pred_np.reshape((-1)).astype(np.int32)
+
     # print final predictions
     # np.savetxt(f'pred{epoch_index}.txt', torch.argmax(predictions, dim=1).cpu().detach().numpy()[0], fmt="%d")
 
@@ -136,6 +134,74 @@ def train_one_epoch(train_loader, epoch_index):
     iou_mean = (intersection / union).mean()
 
     return running_loss, iou_mean
+
+def validate(val_loader):
+    model.eval()
+
+    val_loss = 0.
+
+    # confusion matrix
+    conf_matrix = np.zeros((20, 20), dtype=np.int64)
+
+    #for i, data in enumerate(zip(range_images, labels_images)):
+    for i, (in_vol, _, proj_labels, _, path_seq, path_name, p_x, p_y, _, _, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
+
+        in_vol = in_vol.cuda()
+        proj_labels = proj_labels.cuda()
+        p_x = p_x.cuda()
+        p_y = p_y.cuda()
+
+        #print(in_vol) # (B, H, W, C)
+
+        outputs = model(in_vol) # input format (B, H, W, C)
+
+        #print('outputs shape: ', outputs.shape)
+        #print('labels shape: ', labels_images[i].shape)
+
+        #print(proj_labels.shape) # (B, H, W)
+
+        predictions = outputs.permute(0, 3, 1, 2)
+        #gt = proj_labels.permute(2, 0, 1)
+
+        proj_argmax = predictions[0].argmax(dim=0)
+        #print(proj_argmax)
+        #print(proj_labels)
+
+        #np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
+        #np.savetxt('labels.txt', proj_labels[0].cpu().detach().numpy(), fmt='%d')
+
+        #print('predictions shape ', predictions.shape)
+        #print('labels shape ', gt.shape)
+
+        #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
+        loss = loss_fn(predictions, proj_labels.cuda(non_blocking=True).long())
+        val_loss += loss.item()
+
+        # populate confusion matrix
+        idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+        np.add.at(conf_matrix, idxs, 1)
+
+        # put in original pointcloud using indexes
+        unproj_argmax = proj_argmax[p_y, p_x]
+        #print(unproj_argmax.shape)
+
+        pred_np = unproj_argmax.cpu().detach().numpy()
+        pred_np = pred_np.reshape((-1)).astype(np.int32)
+
+        #np.savetxt('pc_predicitons.txt', pred_np)
+
+    # clean stats
+    tp = np.diag(conf_matrix)
+    fp = conf_matrix.sum(axis=1) - tp
+    fn = conf_matrix.sum(axis=0) - tp
+
+    intersection = tp
+    union = tp + fp + fn + 1e-15
+
+    iou = intersection / union
+    iou_mean = (intersection / union).mean()
+
+    return val_loss, iou_mean
 
 epoch_number = 0
 
@@ -155,20 +221,13 @@ for epoch in range(EPOCHS):
     
     avg_loss, iou_mean = train_one_epoch(train_loader=parser.get_train_set(), epoch_index=epoch_number)
 
+    print('TRAIN Loss = {} | mIoU = {:.2%}'.format(avg_loss, iou_mean))
 
-    running_vloss = 0.0
-    # Set the model to evaluation mode, disabling dropout and using population
-    # statistics for batch normalization.
-    #model.eval()
+    val_loss, val_iou = validate(val_loader=parser.get_valid_set())
 
-    # Disable gradient computation and reduce memory consumption.
-    #with torch.no_grad():
-    #    for i, vdata in enumerate(validation_loader):
-    #        vinputs, vlabels = vdata
-    #        voutputs = model(vinputs)
-    #        vloss = loss_fn(voutputs, vlabels)
-    #        running_vloss += vloss
-
-    print('LOSS train {} | mIoU = {:.2%}'.format(avg_loss, iou_mean))
+    print('VALIDATION Loss = {} | mIoU = {:.2%}'.format(val_loss, val_iou))
 
     epoch_number += 1
+
+# save model
+torch.save(model.state_dict(), 'rangeret-model.pt')

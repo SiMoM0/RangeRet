@@ -162,9 +162,10 @@ class SemanticKitti(Dataset):
       proj_labels = proj_labels * proj_mask
     else:
       proj_labels = []
-    proj_x = torch.full([self.max_points], -1, dtype=torch.long)
+    # TODO fix proj_x and proj_y shape to the exact number of points in the cloud, not max points
+    proj_x = torch.full([unproj_n_points], -1, dtype=torch.long)
     proj_x[:unproj_n_points] = torch.from_numpy(scan.proj_x)
-    proj_y = torch.full([self.max_points], -1, dtype=torch.long)
+    proj_y = torch.full([unproj_n_points], -1, dtype=torch.long)
     proj_y[:unproj_n_points] = torch.from_numpy(scan.proj_y)
     proj = torch.cat([proj_range.unsqueeze(0).clone(),
                       proj_xyz.clone().permute(2, 0, 1),
