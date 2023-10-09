@@ -22,7 +22,16 @@ model_params:
     num_head: 4             # number of heads per layer
     double_v_dim: True      # double v dimension wrt hidden_size
   
-  decoder_dim: 64              # semantic head hidden dimension
+  decoder_dim: 64           # semantic head hidden dimension
+
+  post:                     # post processing
+    KNN:
+      use: True
+      params:
+        knn: 5
+        search: 5
+        sigma: 1.0 
+        cutoff: 1.0
 
 ###################
 ## Dataset options

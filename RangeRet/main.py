@@ -13,6 +13,7 @@ import numpy as np
 from torch import nn
 from tqdm import tqdm
 
+from utils.knn import KNN
 from dataloader.kitti.parser import Parser
 
 from network.rangeret import RangeRet
@@ -55,13 +56,17 @@ parser = Parser(root=dataset_folder,
                 shuffle_train=True)
 
 model = RangeRet(model_params).to(device)
+#model.load_state_dict(torch.load('rangeret-55.3.pt'))
 
 # TODO use focal loss, lovasz loss
 loss_fn = nn.CrossEntropyLoss(ignore_index=0)
 #loss_fn = nn.NLLLoss(ignore_index=0)
 
-optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
-#optimizer = torch.optim.Adam(model.parameters(), lr=0.001, eps=1e-8)
+#optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.05, eps=1e-8)
+
+# post processing
+#knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
 
 def train_one_epoch(train_loader, epoch_index):
     running_loss = 0.
@@ -70,7 +75,7 @@ def train_one_epoch(train_loader, epoch_index):
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
     #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, _, _, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
+    for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
 
         optimizer.zero_grad()
 
@@ -114,6 +119,7 @@ def train_one_epoch(train_loader, epoch_index):
 
         # TODO put in original pointcloud using indexes and compute loss between whole point cloud labels 
         unproj_argmax = proj_argmax[p_y, p_x]
+        #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
         #print(unproj_argmax.shape)
         #print(unproj_labels.shape)
 
@@ -149,7 +155,7 @@ def validate(val_loader):
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
     #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, _, _, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
+    for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
 
         in_vol = in_vol.cuda()
         proj_labels = proj_labels.cuda()
@@ -186,8 +192,9 @@ def validate(val_loader):
         #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
         #np.add.at(conf_matrix, idxs, 1)
 
-        # put in original pointcloud using indexes
+        # put in original pointcloud using indexes or knn
         unproj_argmax = proj_argmax[p_y, p_x]
+        #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
         #print(unproj_argmax.shape)
 
         pred_np = unproj_argmax.cpu().detach().numpy()

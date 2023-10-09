@@ -140,11 +140,11 @@ class SemanticKitti(Dataset):
 
     # make a tensor of the uncompressed data (with the max num points)
     unproj_n_points = scan.points.shape[0]
-    unproj_xyz = torch.full((self.max_points, 3), -1.0, dtype=torch.float)
+    unproj_xyz = torch.full((unproj_n_points, 3), -1.0, dtype=torch.float)
     unproj_xyz[:unproj_n_points] = torch.from_numpy(scan.points)
-    unproj_range = torch.full([self.max_points], -1.0, dtype=torch.float)
+    unproj_range = torch.full([unproj_n_points], -1.0, dtype=torch.float)
     unproj_range[:unproj_n_points] = torch.from_numpy(scan.unproj_range)
-    unproj_remissions = torch.full([self.max_points], -1.0, dtype=torch.float)
+    unproj_remissions = torch.full([unproj_n_points], -1.0, dtype=torch.float)
     unproj_remissions[:unproj_n_points] = torch.from_numpy(scan.remissions)
     if self.gt:
       unproj_labels = torch.full([unproj_n_points], -1.0, dtype=torch.int32)

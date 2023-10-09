@@ -14,6 +14,7 @@ import numpy as np
 from torch import nn
 from tqdm import tqdm
 
+from utils.knn import KNN
 from dataloader.kitti.parser import Parser
 
 from network.rangeret import RangeRet
@@ -63,17 +64,27 @@ parser = Parser(root=dataset_folder,
                 gt=True,
                 shuffle_train=True)
 
+# post processing
+#knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
+
 # load model
 model = RangeRet(model_params).to(device)
 model.load_state_dict(torch.load(model_path))
 model.eval()
 
+# print parameters
+#for name, param in model.named_parameters():
+    #print(f'{name} : {param}')
+
 def infer(data_loader, to_original):
     # confusion matrix
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
+    # set of labels that appear in ground truth
+    unique_gt = set()
+
     #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, _, _, _, _, _, _, _) in tqdm(enumerate(data_loader), total=len(data_loader)):
+    for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(data_loader), total=len(data_loader)):
 
         seq_folder = os.path.join(prediction_path, path_seq[0])
         # create sequence folder if it does not exists
@@ -111,16 +122,20 @@ def infer(data_loader, to_original):
         #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
         #np.add.at(conf_matrix, idxs, 1)
 
-        # put in original pointcloud using indexes
+        # put in original pointcloud using indexes or knn
         unproj_argmax = proj_argmax[p_y, p_x]
+        #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
         #print(unproj_argmax.shape)
 
         pred_np = unproj_argmax.cpu().detach().numpy()
         pred_np = pred_np.reshape((-1)).astype(np.int32)
 
         # populate confusion matrix (iou between predicted point cloud and original labels)
-        idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
+        unproj_labels = unproj_labels.cpu().detach().numpy()
+        idxs = tuple(np.stack((pred_np, unproj_labels.reshape(-1)), axis=0))
         np.add.at(conf_matrix, idxs, 1)
+
+        unique_gt |= set(np.unique(unproj_labels))
 
         # back to original labels
         preds = to_original(pred_np)
@@ -128,6 +143,11 @@ def infer(data_loader, to_original):
         # prediction file path
         path = os.path.join(seq_folder, path_name[0])
         preds.tofile(path)
+
+    # array of true-false
+    label_presence = [index in unique_gt for index in range(0, 20)]
+    label_presence[0] = False # outlier/unlabeled points
+    #print(label_presence)
 
     # clean stats
     tp = np.diag(conf_matrix)
@@ -138,7 +158,7 @@ def infer(data_loader, to_original):
     union = tp + fp + fn + 1e-15
 
     iou = intersection / union
-    iou_mean = (intersection / union).mean()
+    iou_mean = (intersection[label_presence] / union[label_presence]).mean()
 
     return iou, iou_mean
 

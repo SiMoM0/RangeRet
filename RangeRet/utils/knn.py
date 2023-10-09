@@ -61,6 +61,12 @@ class KNN(nn.Module):
     else:
       device = torch.device("cpu")
 
+    proj_range = torch.squeeze(proj_range, 0)
+    unproj_range = torch.squeeze(unproj_range, 0)
+    px = torch.squeeze(px, 0)
+    py = torch.squeeze(py, 0)
+    
+
     # sizes of projection scan
     H, W = proj_range.shape
 
@@ -117,7 +123,7 @@ class KNN(nn.Module):
 
     # get the top k predictions from the knn at each pixel
     knn_argmax = torch.gather(
-        input=unproj_unfold_1_argmax, dim=1, index=knn_idx)
+        input=unproj_unfold_1_argmax.cuda(), dim=1, index=knn_idx.cuda())
 
     # fake an invalid argmax of classes + 1 for all cutoff items
     if self.cutoff > 0:
@@ -130,7 +136,7 @@ class KNN(nn.Module):
     knn_argmax_onehot = torch.zeros(
         (1, self.nclasses + 1, P[0]), device=device).type(proj_range.type())
     ones = torch.ones_like(knn_argmax).type(proj_range.type())
-    knn_argmax_onehot = knn_argmax_onehot.scatter_add_(1, knn_argmax, ones)
+    knn_argmax_onehot = knn_argmax_onehot.scatter_add_(1, knn_argmax.cpu(), ones)
 
     # now vote (as a sum over the onehot shit)  (don't let it choose unlabeled OR invalid)
     knn_argmax_out = knn_argmax_onehot[:, 1:-1].argmax(dim=1) + 1
