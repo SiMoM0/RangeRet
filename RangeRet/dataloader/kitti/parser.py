@@ -147,7 +147,7 @@ class SemanticKitti(Dataset):
     unproj_remissions = torch.full([self.max_points], -1.0, dtype=torch.float)
     unproj_remissions[:unproj_n_points] = torch.from_numpy(scan.remissions)
     if self.gt:
-      unproj_labels = torch.full([self.max_points], -1.0, dtype=torch.int32)
+      unproj_labels = torch.full([unproj_n_points], -1.0, dtype=torch.int32)
       unproj_labels[:unproj_n_points] = torch.from_numpy(scan.sem_label)
     else:
       unproj_labels = []

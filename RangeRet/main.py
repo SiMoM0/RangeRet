@@ -70,7 +70,7 @@ def train_one_epoch(train_loader, epoch_index):
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
     #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, _, path_seq, path_name, _, _, _, _, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
+    for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, _, _, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
 
         optimizer.zero_grad()
 
@@ -109,15 +109,20 @@ def train_one_epoch(train_loader, epoch_index):
         running_loss += loss.item()
 
         # populate confusion matrix
-        idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
-        np.add.at(conf_matrix, idxs, 1)
+        #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+        #np.add.at(conf_matrix, idxs, 1)
 
         # TODO put in original pointcloud using indexes and compute loss between whole point cloud labels 
-        #unproj_argmax = proj_argmax[p_y, p_x]
+        unproj_argmax = proj_argmax[p_y, p_x]
         #print(unproj_argmax.shape)
+        #print(unproj_labels.shape)
 
-        #pred_np = unproj_argmax.cpu().detach().numpy()
-        #pred_np = pred_np.reshape((-1)).astype(np.int32)
+        pred_np = unproj_argmax.cpu().detach().numpy()
+        pred_np = pred_np.reshape((-1)).astype(np.int32)
+
+        # populate confusion matrix (iou between predicted point cloud and original labels)
+        idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
+        np.add.at(conf_matrix, idxs, 1)
 
     # print final predictions
     # np.savetxt(f'pred{epoch_index}.txt', torch.argmax(predictions, dim=1).cpu().detach().numpy()[0], fmt="%d")
@@ -144,7 +149,7 @@ def validate(val_loader):
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
     #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, _, path_seq, path_name, p_x, p_y, _, _, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
+    for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, _, _, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
 
         in_vol = in_vol.cuda()
         proj_labels = proj_labels.cuda()
@@ -178,8 +183,8 @@ def validate(val_loader):
         val_loss += loss.item()
 
         # populate confusion matrix
-        idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
-        np.add.at(conf_matrix, idxs, 1)
+        #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+        #np.add.at(conf_matrix, idxs, 1)
 
         # put in original pointcloud using indexes
         unproj_argmax = proj_argmax[p_y, p_x]
@@ -187,6 +192,10 @@ def validate(val_loader):
 
         pred_np = unproj_argmax.cpu().detach().numpy()
         pred_np = pred_np.reshape((-1)).astype(np.int32)
+
+        # populate confusion matrix (iou between predicted point cloud and original labels)
+        idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
+        np.add.at(conf_matrix, idxs, 1)
 
         #np.savetxt('pc_predicitons.txt', pred_np)
 

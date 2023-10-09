@@ -10,3 +10,6 @@ env/
 
 # profiler
 profiler*
+
+# model
+*.pt
