@@ -56,6 +56,8 @@ class SemanticHead(nn.Module):
         self.mlp2 = nn.Linear(hidden_dim, num_classes)
         #self.softmax = nn.Softmax(-1)
 
+        self.norm = nn.LayerNorm(hidden_dim)
+
         #self.deconv = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
         #self.deconv2 = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
 
@@ -83,6 +85,7 @@ class SemanticHead(nn.Module):
 
         x = self.mlp1(x)
         x = self.gelu(x)
+        x = self.norm(x)
         x = self.mlp2(x)
         #out = self.softmax(x3) # TODO use softmax only for NLL
 

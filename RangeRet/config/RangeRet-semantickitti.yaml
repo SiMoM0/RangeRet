@@ -67,10 +67,11 @@ dataset_params:
 ## Train params
 train_params:
   num_epochs: 128
-  learning_rate: 1.0e-2
-  optimizer: SGD  # [SGD, Adam]
+  learning_rate: 1.0e-4 # 1.0e-2 for SGD | 1.0e-4 for AdamW
+  optimizer: AdamW  # [SGD, AdamW]
   batch_size: 1   # batch size (default rangenet 16)
   workers: 12     # number of threads to get data
+  epsilon_w: 0.001       # class weight w = 1 / (content + epsilon_w)
   #lr_scheduler: CosineAnnealingWarmRestarts  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
   #momentum: 0.9
   #nesterov: True

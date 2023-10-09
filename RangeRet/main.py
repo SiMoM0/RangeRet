@@ -58,8 +58,21 @@ parser = Parser(root=dataset_folder,
 model = RangeRet(model_params).to(device)
 #model.load_state_dict(torch.load('rangeret-55.3.pt'))
 
+# weights for loss and bias
+epsilon_w = config["train_params"]["epsilon_w"]
+content = torch.zeros(parser.get_n_classes(), dtype=torch.float)
+for cl, freq in data_config["content"].items():
+  x_cl = parser.to_xentropy(cl)  # map actual class to xentropy class
+  content[x_cl] += freq
+loss_w = 1 / (content + epsilon_w)   # get weights
+for x_cl, w in enumerate(loss_w):  # ignore the ones necessary to ignore
+  if data_config["learning_ignore"][x_cl]:
+    # don't weigh
+    loss_w[x_cl] = 0
+print("Loss weights from content: ", loss_w.data)
+
 # TODO use focal loss, lovasz loss
-loss_fn = nn.CrossEntropyLoss(ignore_index=0)
+loss_fn = nn.CrossEntropyLoss(ignore_index=0, weight=loss_w).to(device)
 #loss_fn = nn.NLLLoss(ignore_index=0)
 
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
@@ -242,6 +255,8 @@ for epoch in range(EPOCHS):
     val_loss, val_iou = validate(val_loader=parser.get_valid_set())
 
     print('VALIDATION Loss = {} | mIoU = {:.2%}'.format(val_loss, val_iou))
+
+    # TODO add log for train/valid loss and mIoU
 
     epoch_number += 1
 

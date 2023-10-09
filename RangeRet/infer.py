@@ -162,6 +162,8 @@ def infer(data_loader, to_original):
 
     return iou, iou_mean
 
+print("INFERENCE:")
+
 if split == 'train':
     iou, iou_mean = infer(data_loader=parser.get_train_set(), to_original=parser.to_original)
 elif split == 'valid':
