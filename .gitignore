@@ -11,5 +11,9 @@ env/
 # profiler
 profiler*
 
+# logs
+log/
+logs/
+
 # model
 *.pt

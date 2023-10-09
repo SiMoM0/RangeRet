@@ -12,6 +12,7 @@ import torch
 import numpy as np
 from torch import nn
 from tqdm import tqdm
+from datetime import datetime
 
 from utils.knn import KNN
 from dataloader.kitti.parser import Parser
@@ -31,6 +32,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # input data
 config_path = sys.argv[1]
 dataset_folder = sys.argv[2]
+
+# log folder
+log_dir = 'log/'
+if not os.path.exists(log_dir):
+    os.mkdir(log_dir)
 
 # config path (label mapping)
 config = load_yaml(config_path)
@@ -238,6 +244,9 @@ EPOCHS = config['train_params']['num_epochs']
 
 best_vloss = 1_000_000.
 
+#log_data = [['train_loss', 'val_loss', 'train_iou', 'val_iou']]
+log_data = []
+
 for epoch in range(EPOCHS):
     print('EPOCH {}:'.format(epoch_number + 1))
 
@@ -257,8 +266,13 @@ for epoch in range(EPOCHS):
     print('VALIDATION Loss = {} | mIoU = {:.2%}'.format(val_loss, val_iou))
 
     # TODO add log for train/valid loss and mIoU
+    log_data.append([avg_loss, val_loss, iou_mean, val_iou])
 
     epoch_number += 1
+
+# log data
+log_data = np.array(log_data, dtype=np.float32)
+np.savetxt(os.path.join(log_dir, datetime.today().strftime('%Y-%m-%d %H:%M:%S.txt')), log_data, fmt='%f')
 
 # save model
 torch.save(model.state_dict(), 'rangeret-model.pt')
