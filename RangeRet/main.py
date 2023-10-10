@@ -123,8 +123,15 @@ def train_one_epoch(train_loader, epoch_index):
         #print('predictions shape ', predictions.shape)
         #print('labels shape ', gt.shape)
 
-        #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
-        loss = loss_fn(predictions, proj_labels.cuda(non_blocking=True).long())
+        # loss between range images
+        #loss = loss_fn(predictions, proj_labels.cuda(non_blocking=True).long())
+        #loss.backward()
+
+        # loss between point clouds
+        preds = outputs[0][p_y, p_x]
+        #print(preds.shape)
+        #print(unproj_labels.shape)
+        loss = loss_fn(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
         loss.backward()
 
         optimizer.step()
