@@ -7,6 +7,13 @@ from torch import nn
 from network.retnet import RetNet
 from utils.vision_embedding import VisionEmbedding
 
+def compute_shape(H, W, patch_size, stride):
+    '''
+    Compute patched image shape as a tuple (new_H, new_W)
+    '''
+    return (math.floor((H - patch_size) / stride) + 1,
+            math.floor((W - patch_size) / stride) + 1)
+
 # TODO unofficial RangeFormer implementation uses Conv2D
 class REM(nn.Module):
     '''
@@ -52,8 +59,10 @@ class SemanticHead(nn.Module):
         self.width = width
 
         # channel unification
-        self.linears = nn.ModuleList([nn.Linear(in_dim, hidden_dim),
-                                      nn.Linear(in_dim, hidden_dim)])
+        self.linears = nn.ModuleList([
+            nn.Linear(dim, hidden_dim) for dim in in_dim
+        ])
+
         self.gelu = nn.GELU()
 
         self.linear_fuse = nn.Sequential(
@@ -62,6 +71,12 @@ class SemanticHead(nn.Module):
             nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, num_classes)
         )
+
+        # semantic heads
+        self.sem_heads = nn.ModuleList([
+            nn.Linear(hidden_dim, num_classes) for _ in range(len(self.linears))
+        ])
+
         #self.softmax = nn.Softmax(-1)
 
         #self.deconv = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
@@ -71,8 +86,8 @@ class SemanticHead(nn.Module):
         #self.conv2 = nn.Conv2d(hidden_dim, num_classes, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
 
     def forward(self, x):
-        # channel unification
-        heads = []
+        # feature maps as the number of stages
+        feat_maps = []
 
         for i in range(len(x)):
             #print(x[i].shape)
@@ -87,10 +102,17 @@ class SemanticHead(nn.Module):
             feat = torch.nn.functional.interpolate(feat, size=(self.height, self.width), mode='bilinear', align_corners=False)
             #print(feat.shape) # (B, C, H, W)
             # reshape to (B, H, W, C)
-            heads.append(feat.permute(0, 2, 3, 1))
+            feat_maps.append(feat.permute(0, 2, 3, 1))
 
         # fuse feature and feed to final MLPs
-        x = self.linear_fuse(torch.cat(heads, dim=3))
+        x = self.linear_fuse(torch.cat(feat_maps, dim=3))
+
+        # semantic head of each feature maps
+        outs = []
+
+        for i in range(len(feat_maps)):
+            outs.append(self.sem_heads[i](feat_maps[i]))
+
 
         # reshape to (B, C, H, W)
         #x = x.permute(0, 3, 1, 2)
@@ -118,73 +140,101 @@ class SemanticHead(nn.Module):
 
         # TODO add dropout or batchnorm ?
 
-        return x
+        return x, outs
+
+class Stage(nn.Module):
+    '''
+    Stage class containing Vision Embedding module and RetNet architecture
+        index = index of stage (starting from 0)
+    '''
+    def __init__(self, index, model_params: dict):
+        super(Stage, self).__init__()
+        # input
+        self.index = index
+        self.H = model_params['H']
+        self.W = model_params['W']
+        self.patch_size = model_params['patch_size'][index]
+        self.stride = model_params['stride'][index]
+        self.rem_dim = model_params['rem_dim']
+        # retnet parameters
+        self.layers = model_params['retnet']['layers'][index]
+        self.hidden_dim = model_params['retnet']['hidden_dim'][index]
+        self.prev_hidden_dim = model_params['retnet']['hidden_dim'][index-1] if index > 0 else self.rem_dim
+        self.ffn_size = model_params['retnet']['ffn_size'][index]
+        self.num_head = model_params['retnet']['num_head'][index]
+        self.double_v_dim = model_params['retnet']['double_v_dim']
+        self.downsampling = model_params['downsampling'][index]
+        self.next_downsampling = model_params['downsampling'][index+1] if index+1 < len(model_params['downsampling']) else self.downsampling
+
+        # input H, W
+        self.inputH = self.H // self.downsampling
+        self.inputW = self.W // self.downsampling
+
+        # patched image H, W
+        self.patched_image = compute_shape(self.inputH, self.inputW, self.patch_size, self.stride)
+        print(f'Patched image size stage {index} = {self.patched_image}')
+
+        # input H, W for next block
+        self.outputH = self.H // self.next_downsampling
+        self.outputW = self.W // self.next_downsampling
+
+        # modules
+        self.viembed = VisionEmbedding(self.inputH, self.inputW, self.patch_size, self.prev_hidden_dim, self.hidden_dim, self.stride) # H, W, patch size, input channel, output features
+        self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #ex layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
+
+
+    def forward(self, x):
+        #print(f'Stage {self.index} : input shape {x.shape}')
+
+        x = self.viembed(x)
+        #print(f'Stage {self.index} : embedding shape {x.shape}')
+
+        x = self.retnet(x)
+        #print(f'Stage {self.index} : ret shape {x.shape}')
+
+        # input for next stage
+        out = x.permute(0, 3, 1, 2)
+        #print(f'Stage {self.index} : out shape {out.shape}')
+        out = torch.nn.functional.interpolate(out, size=(self.outputH, self.outputW), mode='bilinear')
+        #print(f'Stage {self.index} : out inter shape {out.shape}')
+        return x, out
 
 class RangeRet(nn.Module):
     def __init__(self, model_params: dict):
         super(RangeRet, self).__init__()
         self.H = model_params['H']
         self.W = model_params['W']
-        self.patch_size = model_params['patch_size']
-        self.stride = model_params['stride']
         self.in_dim = model_params['input_dims']
         self.rem_dim = model_params['rem_dim']
         self.decoder_dim = model_params['decoder_dim']
+        self.num_stage = model_params['stages']
+        self.hidden_dims = model_params['retnet']['hidden_dim']
 
-        # retnet parameters
-        self.layers = model_params['retnet']['layers']
-        self.hidden_dim = model_params['retnet']['hidden_dim']
-        self.ffn_size = model_params['retnet']['ffn_size']
-        self.num_head = model_params['retnet']['num_head']
-        self.double_v_dim = model_params['retnet']['double_v_dim']
-
-        self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
-                              math.floor((self.W - self.patch_size) / self.stride) + 1)
-
-        print(f'Patched image size = {self.patched_image}')
-
+        # model
         self.rem = REM(self.in_dim, self.rem_dim)
-        self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
-        # TODO add 4 stages of RetNet with different downsampling
-        self.retnet1 = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
-        
-        self.viembed2 = VisionEmbedding(self.H // 2, self.W // 2, self.patch_size, self.rem_dim, self.rem_dim, self.stride)
-        self.retnet2 = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, (7, 127), double_v_dim=True)
 
-        # TODO set 4 decoders as the number of stages for downsampling
-        self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
+        self.stages = nn.ModuleList([
+            Stage(i, model_params) for i in range(self.num_stage)
+        ])
+
+        self.head = SemanticHead(self.hidden_dims, self.decoder_dim, self.H, self.W, 20)
     
     def forward(self, x):
-
         outs = []
 
         # TODO for better performance dont use different vars
-        rem_out = self.rem(x)
+        x = self.rem(x)
         #print(rem_out.shape) # (1, 64, 1024, 128)
 
         # reshape to (B, C, H, W)
-        rem_out = rem_out.permute(0, 3, 1, 2) # (1, 128, 64, 1024)
+        x = x.permute(0, 3, 1, 2) # (1, 128, 64, 1024)
 
-        patches = self.viembed(rem_out)
-        #print(patches.shape) # (1, 3825, 128)
+        for i in range(self.num_stage):
+            # return feature learned in the stage and input for next stage
+            feat, x = self.stages[i](x)
+            outs.append(feat)
 
-        ret_out = self.retnet1(patches)
-        outs.append(ret_out)
-        #print(ret_out.shape) # (1, 15, 255, 128)
-        
-        ret_out = ret_out.permute(0, 3, 1, 2)
-        #print(ret_out.shape) # (1, 128, 15, 255)
-        ret_out = torch.nn.functional.interpolate(ret_out, size=(32, 512), mode='bilinear')
-        #print(ret_out.shape) # (1, 128, 32, 512)
+        # return predicted range image and intermediate predictions 
+        out, segs = self.head(outs)
 
-        # using REM output
-        patches = self.viembed2(ret_out)
-        #print(patches.shape) # (1, 889, 128)
-
-        ret_out = self.retnet2(patches)
-        outs.append(ret_out)
-        #print(ret_out.shape) # (1, 7, 127, 128)
-
-        out = self.head(outs)
-
-        return out
+        return out, segs
