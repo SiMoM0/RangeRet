@@ -9,6 +9,7 @@ import os
 import sys
 import yaml
 import torch
+import random
 import numpy as np
 from torch import nn
 from tqdm import tqdm
@@ -19,6 +20,18 @@ from dataloader.kitti.parser import Parser
 
 from network.rangeret import RangeRet
 
+def seed_everything(seed=1064):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed) # if you are using multi-GPU.
+        #torch.backends.cudnn.deterministic = True
+        #torch.backends.cudnn.benchmark = False
+    print(f'Using seed = {seed}')
+
 def load_yaml(file_name):
     with open(file_name, 'r') as f:
         try:
@@ -28,6 +41,8 @@ def load_yaml(file_name):
     return config
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+seed_everything()
 
 # input data
 config_path = sys.argv[1]
@@ -44,6 +59,8 @@ data_config = load_yaml(config['dataset_params']['data_config'])
 
 # model params
 model_params = config['model_params']
+
+print(f'Number of stages : {model_params["stages"]}')
 
 # get data
 parser = Parser(root=dataset_folder,
