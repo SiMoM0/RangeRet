@@ -7,6 +7,19 @@ from torch import nn
 from network.retnet import RetNet
 from utils.vision_embedding import VisionEmbedding
 
+class BasicConv2d(nn.Module):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1):
+        super(BasicConv2d, self).__init__()
+        self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation)
+        self.norm = nn.InstanceNorm2d(out_planes)
+        self.gelu = nn.GELU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.norm(x)
+        x = self.gelu(x)
+        return x
+
 # TODO unofficial RangeFormer implementation uses Conv2D
 class REM(nn.Module):
     '''
@@ -18,26 +31,32 @@ class REM(nn.Module):
         self.in_dim = in_dim
         self.out_dim = out_dim
 
-        self.mlp1 = nn.Linear(in_dim, 32)
-        self.mlp2 = nn.Linear(32, 64)
-        self.mlp3 = nn.Linear(64, out_dim)
+        self.mlp1 = nn.Linear(in_dim, 64)
+        self.mlp2 = nn.Linear(64, 128)
+        self.mlp3 = nn.Linear(128, out_dim)
 
         self.gelu = nn.GELU()
 
-        self.norm = nn.LayerNorm(out_dim)
+        self.norm = nn.LayerNorm(in_dim)
+        self.norm1 = nn.LayerNorm(64)
+        self.norm2 = nn.LayerNorm(128)
+        self.norm3 = nn.LayerNorm(out_dim)
 
     def forward(self, x):
         '''
         x: (H, W, in_dim) range image
         '''
         # TODO normalize data ?
+        x = self.norm(x)
         x = self.mlp1(x)
+        x = self.norm1(x)
         x = self.gelu(x)
         x = self.mlp2(x)
+        x = self.norm2(x)
         x = self.gelu(x)
         x = self.mlp3(x)
+        x = self.norm3(x)
         x = self.gelu(x)
-        x = self.norm(x)
         # TODO add some batch normalization or dropout ?
 
         return x
@@ -57,6 +76,11 @@ class SemanticHead(nn.Module):
         #self.softmax = nn.Softmax(-1)
 
         self.norm = nn.LayerNorm(hidden_dim)
+        self.norm2 = nn.LayerNorm(num_classes)
+
+        self.conv1 = BasicConv2d(in_dim, hidden_dim, kernel_size=3, padding=1)
+        self.conv2 = BasicConv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
+        self.conv3 = BasicConv2d(hidden_dim, num_classes, kernel_size=3, padding=1)
 
         #self.deconv = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
         #self.deconv2 = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
@@ -77,16 +101,18 @@ class SemanticHead(nn.Module):
         #x = self.deconv(x)
         #print(x.shape)
         
-        #x = self.conv1(x)
-        #x = self.conv2(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
 
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
 
-        x = self.mlp1(x)
-        x = self.gelu(x)
-        x = self.norm(x)
-        x = self.mlp2(x)
+        #x = self.mlp1(x)
+        #x = self.norm(x)
+        #x = self.gelu(x)
+        #x = self.mlp2(x)
+        #x = self.norm2(x)
         #out = self.softmax(x3) # TODO use softmax only for NLL
 
         # TODO add dropout or batchnorm ?
@@ -116,7 +142,11 @@ class RangeRet(nn.Module):
 
         print(f'Patched image size = {self.patched_image}')
 
-        self.rem = REM(self.in_dim, self.rem_dim)
+        #self.rem = REM(self.in_dim, self.rem_dim)
+        self.rem = nn.Sequential(BasicConv2d(5, 32, kernel_size=3, padding=1),
+                                BasicConv2d(32, 64, kernel_size=3, padding=1),
+                                BasicConv2d(64, 128, kernel_size=3, padding=1))
+        
         self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
         self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
@@ -124,11 +154,12 @@ class RangeRet(nn.Module):
         self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
     
     def forward(self, x):
+        x = x.permute(0, 3, 1, 2) # for conv2d REM
         # TODO for better performance dont use different vars
         rem_out = self.rem(x)
 
         # reshape to (B, C, H, W)
-        rem_out = rem_out.permute(0, 3, 1, 2)
+        #rem_out = rem_out.permute(0, 3, 1, 2)
 
         patches = self.viembed(rem_out)
 
