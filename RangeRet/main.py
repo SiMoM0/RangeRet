@@ -9,6 +9,7 @@ import os
 import sys
 import yaml
 import torch
+import random
 import numpy as np
 from torch import nn
 from tqdm import tqdm
@@ -27,7 +28,21 @@ def load_yaml(file_name):
             config = yaml.load(f)
     return config
 
+def seed_everything(seed=1064):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed) # if you are using multi-GPU.
+        #torch.backends.cudnn.deterministic = True
+        #torch.backends.cudnn.benchmark = False
+    print(f'Using seed = {seed}')
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+seed_everything()
 
 # input data
 config_path = sys.argv[1]
