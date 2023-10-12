@@ -77,7 +77,7 @@ parser = Parser(root=dataset_folder,
                 shuffle_train=True)
 
 model = RangeRet(model_params).to(device)
-#model.load_state_dict(torch.load('rangeret-55.3.pt'))
+#model.load_state_dict(torch.load('rangeret-big.pt'))
 
 # weights for loss and bias
 epsilon_w = config["train_params"]["epsilon_w"]
@@ -98,6 +98,9 @@ loss_fn = nn.CrossEntropyLoss(ignore_index=0, weight=loss_w).to(device)
 
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.05, eps=1e-8)
+# scheduler
+#scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train_params']['num_epochs'], pct_start=0.02)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['train_params']['num_epochs'] - 4, eta_min=1e-5)
 
 # post processing
 #knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
@@ -150,6 +153,7 @@ def train_one_epoch(train_loader, epoch_index):
         loss.backward()
 
         optimizer.step()
+        scheduler.step()
 
         # Gather data and report
         running_loss += loss.item()

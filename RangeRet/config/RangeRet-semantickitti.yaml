@@ -72,6 +72,12 @@ train_params:
   batch_size: 1   # batch size (default rangenet 16)
   workers: 12     # number of threads to get data
   epsilon_w: 0.001       # class weight w = 1 / (content + epsilon_w)
+  
+  scheduler:
+    OneCycleLR: # Old decay with warmup and cosine annealing 
+      max_lr: 0.01 # Equal to optimizer.lr
+      total_steps: 1000 # Equal to max_epochs * iterations_per_epoch
+      pct_start: 0.02 # The percentage of the cycle (in number of steps) spent increasing the learning rate (warmup).
   #lr_scheduler: CosineAnnealingWarmRestarts  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
   #momentum: 0.9
   #nesterov: True

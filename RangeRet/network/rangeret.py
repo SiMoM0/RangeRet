@@ -42,11 +42,14 @@ class REM(nn.Module):
         self.norm2 = nn.LayerNorm(128)
         self.norm3 = nn.LayerNorm(out_dim)
 
-        self.convs = nn.Sequential(BasicConv2d(5, 32, kernel_size=3, padding=1),
+        self.convs = nn.Sequential(BasicConv2d(in_dim, 32, kernel_size=3, padding=1),
+                                #nn.Dropout2d(p=0.2),
                                 BasicConv2d(32, 64, kernel_size=3, padding=1),
-                                BasicConv2d(64, 128, kernel_size=3, padding=1))
+                                #nn.Dropout2d(p=0.2),
+                                BasicConv2d(64, out_dim, kernel_size=3, padding=1))
         
         self.inorm = nn.InstanceNorm2d(in_dim)
+        self.dropout = nn.Dropout2d(p=0.2)
 
     def forward(self, x):
         '''
@@ -54,6 +57,7 @@ class REM(nn.Module):
         '''
         # TODO normalize data ?
         x = x.permute(0, 3, 1, 2) # for conv2d REM (B, C, H, W)
+        #x = self.dropout(x)
         x = self.inorm(x)
         x = self.convs(x)
         
@@ -86,6 +90,7 @@ class SemanticHead(nn.Module):
         #self.softmax = nn.Softmax(-1)
 
         self.norm = nn.LayerNorm(hidden_dim)
+        self.dropout = nn.Dropout(p=0.2)
 
         #self.conv = nn.Conv2d(hidden_dim, num_classes, kernel_size=1)
 
@@ -119,8 +124,10 @@ class SemanticHead(nn.Module):
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
 
+        #x = self.dropout(x)
         x = self.mlp1(x)
         x = self.norm(x)
+        #x = self.dropout(x)
         x = self.gelu(x)
         x = self.mlp2(x)
         
