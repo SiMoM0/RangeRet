@@ -42,21 +42,31 @@ class REM(nn.Module):
         self.norm2 = nn.LayerNorm(128)
         self.norm3 = nn.LayerNorm(out_dim)
 
+        self.convs = nn.Sequential(BasicConv2d(5, 32, kernel_size=3, padding=1),
+                                BasicConv2d(32, 64, kernel_size=3, padding=1),
+                                BasicConv2d(64, 128, kernel_size=3, padding=1))
+        
+        self.inorm = nn.InstanceNorm2d(in_dim)
+
     def forward(self, x):
         '''
         x: (H, W, in_dim) range image
         '''
         # TODO normalize data ?
-        x = self.norm(x)
-        x = self.mlp1(x)
-        x = self.norm1(x)
-        x = self.gelu(x)
-        x = self.mlp2(x)
-        x = self.norm2(x)
-        x = self.gelu(x)
-        x = self.mlp3(x)
-        x = self.norm3(x)
-        x = self.gelu(x)
+        x = x.permute(0, 3, 1, 2) # for conv2d REM (B, C, H, W)
+        x = self.inorm(x)
+        x = self.convs(x)
+        
+        #x = self.norm(x)
+        #x = self.mlp1(x)
+        #x = self.norm1(x)
+        #x = self.gelu(x)
+        #x = self.mlp2(x)
+        #x = self.norm2(x)
+        #x = self.gelu(x)
+        #x = self.mlp3(x)
+        #x = self.norm3(x)
+        #x = self.gelu(x)
         # TODO add some batch normalization or dropout ?
 
         return x
@@ -76,11 +86,12 @@ class SemanticHead(nn.Module):
         #self.softmax = nn.Softmax(-1)
 
         self.norm = nn.LayerNorm(hidden_dim)
-        self.norm2 = nn.LayerNorm(num_classes)
+
+        #self.conv = nn.Conv2d(hidden_dim, num_classes, kernel_size=1)
 
         self.conv1 = BasicConv2d(in_dim, hidden_dim, kernel_size=3, padding=1)
         self.conv2 = BasicConv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
-        self.conv3 = BasicConv2d(hidden_dim, num_classes, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(hidden_dim, num_classes, kernel_size=3, stride=1, padding=1, dilation=1)
 
         #self.deconv = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
         #self.deconv2 = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
@@ -101,18 +112,23 @@ class SemanticHead(nn.Module):
         #x = self.deconv(x)
         #print(x.shape)
         
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
+        #x = self.conv1(x)
+        #x = self.conv2(x)
+        #x = self.conv3(x)
 
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
 
-        #x = self.mlp1(x)
-        #x = self.norm(x)
-        #x = self.gelu(x)
-        #x = self.mlp2(x)
-        #x = self.norm2(x)
+        x = self.mlp1(x)
+        x = self.norm(x)
+        x = self.gelu(x)
+        x = self.mlp2(x)
+        
+        # conv2d as last layer
+        #x = x.permute(0, 3, 1, 2)
+        #x = self.conv(x)
+        #x = x.permute(0, 2, 3, 1)
+        
         #out = self.softmax(x3) # TODO use softmax only for NLL
 
         # TODO add dropout or batchnorm ?
@@ -142,10 +158,7 @@ class RangeRet(nn.Module):
 
         print(f'Patched image size = {self.patched_image}')
 
-        #self.rem = REM(self.in_dim, self.rem_dim)
-        self.rem = nn.Sequential(BasicConv2d(5, 32, kernel_size=3, padding=1),
-                                BasicConv2d(32, 64, kernel_size=3, padding=1),
-                                BasicConv2d(64, 128, kernel_size=3, padding=1))
+        self.rem = REM(self.in_dim, self.rem_dim)
         
         self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
@@ -154,7 +167,6 @@ class RangeRet(nn.Module):
         self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
     
     def forward(self, x):
-        x = x.permute(0, 3, 1, 2) # for conv2d REM
         # TODO for better performance dont use different vars
         rem_out = self.rem(x)
 

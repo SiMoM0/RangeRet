@@ -185,7 +185,7 @@ def train_one_epoch(train_loader, epoch_index):
     iou = intersection / union
     iou_mean = (intersection / union).mean()
 
-    return running_loss, iou_mean
+    return running_loss / len(train_loader), iou_mean
 
 def validate(val_loader):
     model.eval()
@@ -258,7 +258,7 @@ def validate(val_loader):
     iou = intersection / union
     iou_mean = (intersection / union).mean()
 
-    return val_loss, iou_mean
+    return val_loss / len(val_loader), iou_mean
 
 epoch_number = 0
 
