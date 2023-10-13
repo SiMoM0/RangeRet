@@ -8,13 +8,15 @@ from network.retnet import RetNet
 from utils.vision_embedding import VisionEmbedding
 
 class BasicConv2d(nn.Module):
-    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, prob=0.15):
         super(BasicConv2d, self).__init__()
+        self.drop = nn.Dropout2d(p=prob)
         self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation)
         self.norm = nn.InstanceNorm2d(out_planes)
         self.gelu = nn.GELU()
 
     def forward(self, x):
+        x = self.drop(x)
         x = self.conv(x)
         x = self.norm(x)
         x = self.gelu(x)
@@ -26,7 +28,7 @@ class REM(nn.Module):
     Range Embedding Module: map each point in the range image to a
     higher-dim embedding (128) using 3 MLP layers
     '''
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim, out_dim, dropout=0.1):
         super(REM, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -42,11 +44,9 @@ class REM(nn.Module):
         self.norm2 = nn.LayerNorm(128)
         self.norm3 = nn.LayerNorm(out_dim)
 
-        self.convs = nn.Sequential(BasicConv2d(in_dim, 32, kernel_size=3, padding=1),
-                                #nn.Dropout2d(p=0.2),
-                                BasicConv2d(32, 64, kernel_size=3, padding=1),
-                                #nn.Dropout2d(p=0.2),
-                                BasicConv2d(64, out_dim, kernel_size=3, padding=1))
+        self.convs = nn.Sequential(BasicConv2d(in_dim, 32, kernel_size=3, padding=1, prob=dropout),
+                                BasicConv2d(32, 64, kernel_size=3, padding=1, prob=dropout),
+                                BasicConv2d(64, out_dim, kernel_size=3, padding=1, prob=dropout))
         
         self.inorm = nn.InstanceNorm2d(in_dim)
         self.dropout = nn.Dropout2d(p=0.2)
@@ -165,7 +165,7 @@ class RangeRet(nn.Module):
 
         print(f'Patched image size = {self.patched_image}')
 
-        self.rem = REM(self.in_dim, self.rem_dim)
+        self.rem = REM(self.in_dim, self.rem_dim, dropout=0.0)
         
         self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
