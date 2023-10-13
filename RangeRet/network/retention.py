@@ -21,6 +21,10 @@ class SimpleRetention(nn.Module):
         self.W_Q = nn.Parameter(torch.randn(hidden_size, head_size) / hidden_size, requires_grad=True)
         self.W_K = nn.Parameter(torch.randn(hidden_size, head_size) / hidden_size, requires_grad=True)
         self.W_V = nn.Parameter(torch.randn(hidden_size, self.v_dim) / hidden_size, requires_grad=True)
+
+        self.wq = nn.Linear(hidden_size, head_size, bias=False)
+        self.wk = nn.Linear(hidden_size, head_size, bias=False)
+        self.wv = nn.Linear(hidden_size, self.v_dim, bias=False)
         
         self.D = self._get_D(num_patches).cuda()
 
@@ -34,14 +38,19 @@ class SimpleRetention(nn.Module):
         #sequence_length = x.shape[1]
         #D = self._get_D(sequence_length).to(self.W_Q.device)
 
-        Q = (x @ self.W_Q)
-        K = (x @ self.W_K)
+        #Q = (x @ self.W_Q)
+        #K = (x @ self.W_K)
+
+        Q = self.wq(x)
+        K = self.wk(x)
 
         Q = self.xpos(Q)
         K = self.xpos(K, downscale=True)
 
-        V = x @ self.W_V
-        ret = (Q @ K.permute(0, 2, 1)) * self.D.unsqueeze(0)
+        #V = x @ self.W_V
+        V = self.wv(x)
+        #sret = (Q @ K.permute(0, 2, 1)) * self.D.unsqueeze(0)
+        ret = torch.matmul(Q, K.permute(0, 2, 1)) * self.D.unsqueeze(0)
         
         return ret @ V
         
@@ -129,6 +138,8 @@ class MultiScaleRetention(nn.Module):
         self.swish = lambda x: x * torch.sigmoid(x)
         self.W_G = nn.Parameter(torch.randn(hidden_size, self.v_dim) / hidden_size)
         self.W_O = nn.Parameter(torch.randn(self.v_dim, hidden_size) / hidden_size)
+        self.wg = nn.Linear(hidden_size, self.v_dim, bias=False)
+        self.wo = nn.Linear(self.v_dim, hidden_size, bias=False)
         self.group_norm = nn.GroupNorm(heads, self.v_dim)
 
         self.retentions = nn.ModuleList([
@@ -150,8 +161,9 @@ class MultiScaleRetention(nn.Module):
         Y_shape = Y.shape
         Y = self.group_norm(Y.reshape(-1, self.v_dim)).reshape(Y_shape)
 
-        return (self.swish(x @ self.W_G) * Y) @ self.W_O
-    
+        #return (self.swish(x @ self.W_G) * Y) @ self.W_O
+        return self.wo(self.swish(self.wg(x)))
+
     def forward_recurrent(self, x_n, s_n_1s, n):
         """
         recurrent representation of the multi-scale retention mechanism
