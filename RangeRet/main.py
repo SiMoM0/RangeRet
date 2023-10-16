@@ -17,6 +17,8 @@ from datetime import datetime
 
 from utils.knn import KNN
 from dataloader.kitti.parser import Parser
+from utils.lovasz_loss import Lovasz_loss
+from utils.focal_loss import FocalLoss
 
 from network.rangeret import RangeRet
 
@@ -93,8 +95,10 @@ for x_cl, w in enumerate(loss_w):  # ignore the ones necessary to ignore
 print("Loss weights from content: ", loss_w.data)
 
 # TODO use focal loss, lovasz loss
-loss_fn = nn.CrossEntropyLoss(ignore_index=0, weight=loss_w).to(device)
+ce_criterion = nn.CrossEntropyLoss(ignore_index=0, weight=loss_w).to(device)
 #loss_fn = nn.NLLLoss(ignore_index=0)
+#lovasz_criterion = Lovasz_loss(ignore=0).to(device)
+#focal_criterion = FocalLoss(ignore_index=0).to(device)
 
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.05, eps=1e-8)
@@ -147,16 +151,24 @@ def train_one_epoch(train_loader, epoch_index):
 
         # loss between point clouds
         preds = outputs[0][p_y, p_x]
-        #print(preds.shape)
         #print(unproj_labels.shape)
-        loss = loss_fn(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        loss.backward()
+        ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        
+        #loss = ce_loss + lovasz_loss
+
+        ce_loss.backward()
+        #focal_loss.backward()
+        #loss.backward()
 
         optimizer.step()
         scheduler.step()
 
         # Gather data and report
-        running_loss += loss.item()
+        running_loss += ce_loss.item()
+        #running_loss += focal_loss.item()
+        #running_loss += loss.item()
 
         # populate confusion matrix
         #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
@@ -229,9 +241,18 @@ def validate(val_loader):
         #print('predictions shape ', predictions.shape)
         #print('labels shape ', gt.shape)
 
+        preds = outputs[0][p_y, p_x]
+
         #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
-        loss = loss_fn(predictions, proj_labels.cuda(non_blocking=True).long())
-        val_loss += loss.item()
+        ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+
+        #loss = ce_loss + lovasz_loss
+
+        val_loss += ce_loss.item()
+        #val_loss += focal_loss.item()
+        #val_loss += loss.item()
 
         # populate confusion matrix
         #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
