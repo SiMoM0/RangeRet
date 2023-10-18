@@ -8,7 +8,7 @@ from network.retnet import RetNet
 from utils.vision_embedding import VisionEmbedding
 
 class BasicConv2d(nn.Module):
-    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, prob=0.15):
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, prob=0.0):
         super(BasicConv2d, self).__init__()
         self.drop = nn.Dropout2d(p=prob)
         self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation)
@@ -28,7 +28,7 @@ class REM(nn.Module):
     Range Embedding Module: map each point in the range image to a
     higher-dim embedding (128) using 3 MLP layers
     '''
-    def __init__(self, in_dim, out_dim, dropout=0.1):
+    def __init__(self, in_dim, out_dim, dropout=0.0):
         super(REM, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -49,7 +49,7 @@ class REM(nn.Module):
                                 BasicConv2d(64, out_dim, kernel_size=3, padding=1, prob=dropout))
         
         self.inorm = nn.InstanceNorm2d(in_dim)
-        self.dropout = nn.Dropout2d(p=0.2)
+        self.dropout = nn.Dropout2d(p=dropout)
 
     def forward(self, x):
         '''
@@ -90,7 +90,7 @@ class SemanticHead(nn.Module):
         #self.softmax = nn.Softmax(-1)
 
         self.norm = nn.LayerNorm(hidden_dim)
-        self.dropout = nn.Dropout(p=0.2)
+        self.dropout = nn.Dropout(p=0.15)
 
         #self.conv = nn.Conv2d(hidden_dim, num_classes, kernel_size=1)
 

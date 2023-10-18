@@ -69,7 +69,12 @@ parser = Parser(root=dataset_folder,
 
 # load model
 model = RangeRet(model_params).to(device)
-model.load_state_dict(torch.load(model_path))
+try:
+    #load model
+    model.load_state_dict(torch.load(model_path))
+except:
+    # load model from checkpoint
+    model.load_state_dict(torch.load(model_path)['model_state_dict'])
 model.eval()
 
 # print parameters

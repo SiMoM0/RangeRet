@@ -49,6 +49,8 @@ seed_everything()
 # input data
 config_path = sys.argv[1]
 dataset_folder = sys.argv[2]
+save_checkpoint = True
+load_checkpoint = False
 
 # log folder
 log_dir = 'log/'
@@ -96,9 +98,9 @@ print("Loss weights from content: ", loss_w.data)
 
 # TODO use focal loss, lovasz loss
 ce_criterion = nn.CrossEntropyLoss(ignore_index=0, weight=loss_w).to(device)
-#loss_fn = nn.NLLLoss(ignore_index=0)
-#lovasz_criterion = Lovasz_loss(ignore=0).to(device)
-#focal_criterion = FocalLoss(ignore_index=0).to(device)
+lovasz_criterion = Lovasz_loss(ignore=0).to(device)
+focal_criterion = FocalLoss(ignore_index=0).to(device)
+#nll_criterion = nn.NLLLoss(ignore_index=0).to(device)
 
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.05, eps=1e-8)
@@ -153,22 +155,24 @@ def train_one_epoch(train_loader, epoch_index):
         preds = outputs[0][p_y, p_x]
         #print(unproj_labels.shape)
         ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
         
-        #loss = ce_loss + lovasz_loss
+        loss = ce_loss + focal_loss + lovasz_loss
 
-        ce_loss.backward()
+        #ce_loss.backward()
+        #lovasz_loss.backward()
         #focal_loss.backward()
-        #loss.backward()
+        loss.backward()
 
         optimizer.step()
         scheduler.step()
 
         # Gather data and report
-        running_loss += ce_loss.item()
+        #running_loss += ce_loss.item()
+        #running_loss += lovasz_loss.item()
         #running_loss += focal_loss.item()
-        #running_loss += loss.item()
+        running_loss += loss.item()
 
         # populate confusion matrix
         #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
@@ -245,14 +249,15 @@ def validate(val_loader):
 
         #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
         ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
 
-        #loss = ce_loss + lovasz_loss
+        loss = ce_loss + focal_loss + lovasz_loss
 
-        val_loss += ce_loss.item()
+        #val_loss += ce_loss.item()
+        #val_loss += lovasz_loss.item()
         #val_loss += focal_loss.item()
-        #val_loss += loss.item()
+        val_loss += loss.item()
 
         # populate confusion matrix
         #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
@@ -314,6 +319,16 @@ for epoch in range(EPOCHS):
 
     # TODO add log for train/valid loss and mIoU
     log_data.append([avg_loss, val_loss, iou_mean, val_iou])
+
+    # save model checkpoint
+    if save_checkpoint:
+        torch.save({
+            'epoch': epoch_number + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'loss': avg_loss
+        }, 'checkpoints/model-checkpoint.pt')
 
     epoch_number += 1
 

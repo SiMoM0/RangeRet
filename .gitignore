@@ -17,3 +17,6 @@ logs/
 
 # model
 *.pt
+
+# checkpoints
+checkpoints/
