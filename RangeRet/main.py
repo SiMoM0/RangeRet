@@ -290,17 +290,24 @@ def validate(val_loader):
 
     return val_loss / len(val_loader), iou_mean
 
-epoch_number = 0
-
+start_epoch = 0
 EPOCHS = config['train_params']['num_epochs']
 
-best_vloss = 1_000_000.
+#load checkpoint
+if load_checkpoint:
+    checkpoint = torch.load('checkpoints/checkpoint43-39epochs.pt')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    start_epoch = checkpoint['epoch'] - 1
+    loss = checkpoint['loss']
+    print(f'CHECKPOINT LOADED | epoch = {start_epoch} | loss = {loss}')
 
 #log_data = [['train_loss', 'val_loss', 'train_iou', 'val_iou']]
 log_data = []
 
-for epoch in range(EPOCHS):
-    print('EPOCH {}:'.format(epoch_number + 1))
+for epoch in range(start_epoch, EPOCHS):
+    print('EPOCH {}:'.format(epoch + 1))
 
     # Make sure gradient tracking is on, and do a pass over the data
     model.train(True)
@@ -323,14 +330,12 @@ for epoch in range(EPOCHS):
     # save model checkpoint
     if save_checkpoint:
         torch.save({
-            'epoch': epoch_number + 1,
+            'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'loss': avg_loss
         }, 'checkpoints/model-checkpoint.pt')
-
-    epoch_number += 1
 
 # log data
 log_data = np.array(log_data, dtype=np.float32)
