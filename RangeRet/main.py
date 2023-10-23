@@ -316,7 +316,7 @@ for epoch in range(start_epoch, EPOCHS):
     #p = pstats.Stats("my_func_stats")
     #p.sort_stats("cumulative").print_stats()
     
-    avg_loss, iou_mean = train_one_epoch(train_loader=parser.get_train_set(), epoch_index=epoch_number)
+    avg_loss, iou_mean = train_one_epoch(train_loader=parser.get_train_set(), epoch_index=epoch)
 
     print('TRAIN Loss = {} | mIoU = {:.2%}'.format(avg_loss, iou_mean))
 
