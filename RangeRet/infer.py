@@ -88,66 +88,67 @@ def infer(data_loader, to_original):
     # set of labels that appear in ground truth
     unique_gt = set()
 
-    #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(data_loader), total=len(data_loader)):
+    with torch.no_grad():
+        #for i, data in enumerate(zip(range_images, labels_images)):
+        for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(data_loader), total=len(data_loader)):
 
-        seq_folder = os.path.join(prediction_path, path_seq[0])
-        # create sequence folder if it does not exists
-        if not os.path.exists(seq_folder):
-            os.mkdir(seq_folder)
+            seq_folder = os.path.join(prediction_path, path_seq[0])
+            # create sequence folder if it does not exists
+            if not os.path.exists(seq_folder):
+                os.mkdir(seq_folder)
 
-        in_vol = in_vol.cuda()
-        proj_labels = proj_labels.cuda()
-        p_x = p_x.cuda()
-        p_y = p_y.cuda()
+            in_vol = in_vol.cuda()
+            proj_labels = proj_labels.cuda()
+            p_x = p_x.cuda()
+            p_y = p_y.cuda()
 
-        #print(in_vol) # (B, H, W, C)
+            #print(in_vol) # (B, H, W, C)
 
-        outputs = model(in_vol) # input format (B, H, W, C)
+            outputs = model(in_vol) # input format (B, H, W, C)
 
-        #print('outputs shape: ', outputs.shape)
-        #print('labels shape: ', labels_images[i].shape)
+            #print('outputs shape: ', outputs.shape)
+            #print('labels shape: ', labels_images[i].shape)
 
-        #print(proj_labels.shape) # (B, H, W)
+            #print(proj_labels.shape) # (B, H, W)
 
-        predictions = outputs.permute(0, 3, 1, 2)
-        #gt = proj_labels.permute(2, 0, 1)
+            predictions = outputs.permute(0, 3, 1, 2)
+            #gt = proj_labels.permute(2, 0, 1)
 
-        proj_argmax = predictions[0].argmax(dim=0)
-        #print(proj_argmax)
-        #print(proj_labels)
+            proj_argmax = predictions[0].argmax(dim=0)
+            #print(proj_argmax)
+            #print(proj_labels)
 
-        #np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
-        #np.savetxt('labels.txt', proj_labels[0].cpu().detach().numpy(), fmt='%d')
+            #np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
+            #np.savetxt('labels.txt', proj_labels[0].cpu().detach().numpy(), fmt='%d')
 
-        #print('predictions shape ', predictions.shape)
-        #print('labels shape ', gt.shape)
+            #print('predictions shape ', predictions.shape)
+            #print('labels shape ', gt.shape)
 
-        # populate confusion matrix
-        #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
-        #np.add.at(conf_matrix, idxs, 1)
+            # populate confusion matrix
+            #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+            #np.add.at(conf_matrix, idxs, 1)
 
-        # put in original pointcloud using indexes or knn
-        unproj_argmax = proj_argmax[p_y, p_x]
-        #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
-        #print(unproj_argmax.shape)
+            # put in original pointcloud using indexes or knn
+            unproj_argmax = proj_argmax[p_y, p_x]
+            #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
+            #print(unproj_argmax.shape)
 
-        pred_np = unproj_argmax.cpu().detach().numpy()
-        pred_np = pred_np.reshape((-1)).astype(np.int32)
+            pred_np = unproj_argmax.cpu().detach().numpy()
+            pred_np = pred_np.reshape((-1)).astype(np.int32)
 
-        # populate confusion matrix (iou between predicted point cloud and original labels)
-        unproj_labels = unproj_labels.cpu().detach().numpy()
-        idxs = tuple(np.stack((pred_np, unproj_labels.reshape(-1)), axis=0))
-        np.add.at(conf_matrix, idxs, 1)
+            # populate confusion matrix (iou between predicted point cloud and original labels)
+            unproj_labels = unproj_labels.cpu().detach().numpy()
+            idxs = tuple(np.stack((pred_np, unproj_labels.reshape(-1)), axis=0))
+            np.add.at(conf_matrix, idxs, 1)
 
-        unique_gt |= set(np.unique(unproj_labels))
+            unique_gt |= set(np.unique(unproj_labels))
 
-        # back to original labels
-        preds = to_original(pred_np)
+            # back to original labels
+            preds = to_original(pred_np)
 
-        # prediction file path
-        path = os.path.join(seq_folder, path_name[0])
-        preds.tofile(path)
+            # prediction file path
+            path = os.path.join(seq_folder, path_name[0])
+            preds.tofile(path)
 
     # array of true-false
     label_presence = [index in unique_gt for index in range(0, 20)]

@@ -112,6 +112,10 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['
 #knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
 
 def train_one_epoch(train_loader, epoch_index):
+    torch.cuda.empty_cache()
+    # Make sure gradient tracking is on, and do a pass over the data
+    model.train(True)
+
     running_loss = 0.
 
     # confusion matrix
@@ -208,6 +212,8 @@ def train_one_epoch(train_loader, epoch_index):
     return running_loss / len(train_loader), iou_mean
 
 def validate(val_loader):
+    torch.cuda.empty_cache()
+    
     model.eval()
 
     val_loss = 0.
@@ -215,67 +221,68 @@ def validate(val_loader):
     # confusion matrix
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
-    #for i, data in enumerate(zip(range_images, labels_images)):
-    for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
+    with torch.no_grad():
+        #for i, data in enumerate(zip(range_images, labels_images)):
+        for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
 
-        in_vol = in_vol.cuda()
-        proj_labels = proj_labels.cuda()
-        p_x = p_x.cuda()
-        p_y = p_y.cuda()
+            in_vol = in_vol.cuda()
+            proj_labels = proj_labels.cuda()
+            p_x = p_x.cuda()
+            p_y = p_y.cuda()
 
-        #print(in_vol) # (B, H, W, C)
+            #print(in_vol) # (B, H, W, C)
 
-        outputs = model(in_vol) # input format (B, H, W, C)
+            outputs = model(in_vol) # input format (B, H, W, C)
 
-        #print('outputs shape: ', outputs.shape)
-        #print('labels shape: ', labels_images[i].shape)
+            #print('outputs shape: ', outputs.shape)
+            #print('labels shape: ', labels_images[i].shape)
 
-        #print(proj_labels.shape) # (B, H, W)
+            #print(proj_labels.shape) # (B, H, W)
 
-        predictions = outputs.permute(0, 3, 1, 2)
-        #gt = proj_labels.permute(2, 0, 1)
+            predictions = outputs.permute(0, 3, 1, 2)
+            #gt = proj_labels.permute(2, 0, 1)
 
-        proj_argmax = predictions[0].argmax(dim=0)
-        #print(proj_argmax)
-        #print(proj_labels)
+            proj_argmax = predictions[0].argmax(dim=0)
+            #print(proj_argmax)
+            #print(proj_labels)
 
-        #np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
-        #np.savetxt('labels.txt', proj_labels[0].cpu().detach().numpy(), fmt='%d')
+            #np.savetxt('pred.txt', proj_argmax[0].cpu().detach().numpy(), fmt='%d')
+            #np.savetxt('labels.txt', proj_labels[0].cpu().detach().numpy(), fmt='%d')
 
-        #print('predictions shape ', predictions.shape)
-        #print('labels shape ', gt.shape)
+            #print('predictions shape ', predictions.shape)
+            #print('labels shape ', gt.shape)
 
-        preds = outputs[0][p_y, p_x]
+            preds = outputs[0][p_y, p_x]
 
-        #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
-        ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+            #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
+            ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+            lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+            focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
 
-        loss = ce_loss + focal_loss + lovasz_loss
+            loss = ce_loss + focal_loss + lovasz_loss
 
-        #val_loss += ce_loss.item()
-        #val_loss += lovasz_loss.item()
-        #val_loss += focal_loss.item()
-        val_loss += loss.item()
+            #val_loss += ce_loss.item()
+            #val_loss += lovasz_loss.item()
+            #val_loss += focal_loss.item()
+            val_loss += loss.item()
 
-        # populate confusion matrix
-        #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
-        #np.add.at(conf_matrix, idxs, 1)
+            # populate confusion matrix
+            #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+            #np.add.at(conf_matrix, idxs, 1)
 
-        # put in original pointcloud using indexes or knn
-        unproj_argmax = proj_argmax[p_y, p_x]
-        #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
-        #print(unproj_argmax.shape)
+            # put in original pointcloud using indexes or knn
+            unproj_argmax = proj_argmax[p_y, p_x]
+            #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
+            #print(unproj_argmax.shape)
 
-        pred_np = unproj_argmax.cpu().detach().numpy()
-        pred_np = pred_np.reshape((-1)).astype(np.int32)
+            pred_np = unproj_argmax.cpu().detach().numpy()
+            pred_np = pred_np.reshape((-1)).astype(np.int32)
 
-        # populate confusion matrix (iou between predicted point cloud and original labels)
-        idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
-        np.add.at(conf_matrix, idxs, 1)
+            # populate confusion matrix (iou between predicted point cloud and original labels)
+            idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
+            np.add.at(conf_matrix, idxs, 1)
 
-        #np.savetxt('pc_predicitons.txt', pred_np)
+            #np.savetxt('pc_predicitons.txt', pred_np)
 
     # clean stats
     tp = np.diag(conf_matrix)
@@ -308,9 +315,6 @@ log_data = []
 
 for epoch in range(start_epoch, EPOCHS):
     print('EPOCH {}:'.format(epoch + 1))
-
-    # Make sure gradient tracking is on, and do a pass over the data
-    model.train(True)
 
     #cProfile.run("train_one_epoch(train_loader=parser.get_train_set(), epoch_index=epoch_number)", "my_func_stats")
     #p = pstats.Stats("my_func_stats")
