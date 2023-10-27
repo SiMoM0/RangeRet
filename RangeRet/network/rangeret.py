@@ -33,15 +33,15 @@ class REM(nn.Module):
         self.in_dim = in_dim
         self.out_dim = out_dim
 
-        self.mlp1 = nn.Linear(in_dim, 64)
-        self.mlp2 = nn.Linear(64, 128)
-        self.mlp3 = nn.Linear(128, out_dim)
+        self.mlp1 = nn.Linear(in_dim, 32)
+        self.mlp2 = nn.Linear(32, 64)
+        self.mlp3 = nn.Linear(64, out_dim)
 
         self.gelu = nn.GELU()
 
         self.norm = nn.LayerNorm(in_dim)
-        self.norm1 = nn.LayerNorm(64)
-        self.norm2 = nn.LayerNorm(128)
+        self.norm1 = nn.LayerNorm(32)
+        self.norm2 = nn.LayerNorm(64)
         self.norm3 = nn.LayerNorm(out_dim)
 
         self.convs = nn.Sequential(BasicConv2d(in_dim, 32, kernel_size=3, padding=1, prob=dropout),

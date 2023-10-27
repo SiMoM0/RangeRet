@@ -81,7 +81,7 @@ parser = Parser(root=dataset_folder,
                 shuffle_train=True)
 
 model = RangeRet(model_params).to(device)
-#model.load_state_dict(torch.load('rangeret-big.pt'))
+#model.load_state_dict(torch.load('rangeret-ocycle.pt'))
 
 # weights for loss and bias
 epsilon_w = config["train_params"]["epsilon_w"]
@@ -103,10 +103,10 @@ focal_criterion = FocalLoss(ignore_index=0).to(device)
 #nll_criterion = nn.NLLLoss(ignore_index=0).to(device)
 
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.05, eps=1e-8)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
 # scheduler
-#scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train_params']['num_epochs'], pct_start=0.02)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['train_params']['num_epochs'] - 4, eta_min=1e-5)
+scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train_params']['num_epochs'], pct_start=0.02)
+#scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['train_params']['num_epochs'] - 4, eta_min=1e-5)
 
 # post processing
 #knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
@@ -302,7 +302,7 @@ EPOCHS = config['train_params']['num_epochs']
 
 #load checkpoint
 if load_checkpoint:
-    checkpoint = torch.load('checkpoints/checkpoint43-39epochs.pt')
+    checkpoint = torch.load('checkpoints/checkpoint51-64epochs.pt')
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
