@@ -30,7 +30,7 @@ class SimpleRetention(nn.Module):
 
         self.xpos = XPOS(head_size)
 
-        #elf.reset_parameters()
+        #self.reset_parameters()
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.wq.weight, gain=2 ** -2.5)
@@ -175,7 +175,7 @@ class MultiScaleRetention(nn.Module):
         Y = self.group_norm(Y.reshape(-1, self.v_dim)).reshape(Y_shape)
 
         return (self.swish(x @ self.W_G) * Y) @ self.W_O
-        #return self.wo(self.swish(self.wg(x)))
+        #return self.wo(self.swish(self.wg(x)) * Y)
 
     def forward_recurrent(self, x_n, s_n_1s, n):
         """
