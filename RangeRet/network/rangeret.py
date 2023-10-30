@@ -153,6 +153,10 @@ class RangeRet(nn.Module):
         self.rem_dim = model_params['rem_dim']
         self.decoder_dim = model_params['decoder_dim']
 
+        # str training parameters
+        self.splits = 4
+        self.split_size = self.W // self.splits
+
         # retnet parameters
         self.layers = model_params['retnet']['layers']
         self.hidden_dim = model_params['retnet']['hidden_dim']
@@ -160,14 +164,17 @@ class RangeRet(nn.Module):
         self.num_head = model_params['retnet']['num_head']
         self.double_v_dim = model_params['retnet']['double_v_dim']
 
+        #self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
+                              #math.floor((self.W - self.patch_size) / self.stride) + 1)
+
         self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
-                              math.floor((self.W - self.patch_size) / self.stride) + 1)
+                              math.floor((self.split_size - self.patch_size) / self.stride) + 1)
 
         print(f'Patched image size = {self.patched_image}')
 
         self.rem = REM(self.in_dim, self.rem_dim, dropout=0.0)
         
-        self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
+        self.viembed = VisionEmbedding(self.H, self.split_size, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
         self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
         # TODO set 4 decoders as the number of stages for downsampling
@@ -180,10 +187,25 @@ class RangeRet(nn.Module):
         # reshape to (B, C, H, W)
         #rem_out = rem_out.permute(0, 3, 1, 2)
 
-        patches = self.viembed(rem_out)
+        #patches = self.viembed(rem_out)
 
-        ret_out = self.retnet(patches)
+        #ret_out = self.retnet(patches)
 
-        out = self.head(ret_out)
+        #out = self.head(ret_out)
 
-        return out
+        #return out
+
+        # STR training
+
+        ret_out = []
+
+        rem_out = torch.split(rem_out, self.split_size, dim=3)
+
+        # range training
+        for i in range(self.splits):
+            x = self.viembed(rem_out[i])
+            ret_out.append(self.retnet(x))
+
+        x = self.head(torch.cat(ret_out, dim=2))
+
+        return x
