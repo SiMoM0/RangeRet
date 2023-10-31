@@ -65,7 +65,7 @@ parser = Parser(root=dataset_folder,
                 shuffle_train=True)
 
 # post processing
-#knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
+knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
 
 # load model
 model = RangeRet(model_params).to(device)
@@ -105,6 +105,7 @@ def infer(data_loader, to_original):
             #print(in_vol) # (B, H, W, C)
 
             outputs = model(in_vol) # input format (B, H, W, C)
+            #outputs = model.forward_recurrent(in_vol) # input format (B, H, W, C)
 
             #print('outputs shape: ', outputs.shape)
             #print('labels shape: ', labels_images[i].shape)
@@ -129,8 +130,9 @@ def infer(data_loader, to_original):
             #np.add.at(conf_matrix, idxs, 1)
 
             # put in original pointcloud using indexes or knn
-            unproj_argmax = proj_argmax[p_y, p_x]
-            #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
+            #unproj_argmax = proj_argmax[p_y, p_x]
+            # use knn post processing
+            unproj_argmax = knn(proj_range.cuda(), unproj_range.cuda(), proj_argmax, p_x, p_y)
             #print(unproj_argmax.shape)
 
             pred_np = unproj_argmax.cpu().detach().numpy()

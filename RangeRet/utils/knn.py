@@ -136,7 +136,7 @@ class KNN(nn.Module):
     knn_argmax_onehot = torch.zeros(
         (1, self.nclasses + 1, P[0]), device=device).type(proj_range.type())
     ones = torch.ones_like(knn_argmax).type(proj_range.type())
-    knn_argmax_onehot = knn_argmax_onehot.scatter_add_(1, knn_argmax.cpu(), ones)
+    knn_argmax_onehot = knn_argmax_onehot.scatter_add_(1, knn_argmax, ones)
 
     # now vote (as a sum over the onehot shit)  (don't let it choose unlabeled OR invalid)
     knn_argmax_out = knn_argmax_onehot[:, 1:-1].argmax(dim=1) + 1

@@ -33,15 +33,15 @@ class REM(nn.Module):
         self.in_dim = in_dim
         self.out_dim = out_dim
 
-        self.mlp1 = nn.Linear(in_dim, 32)
-        self.mlp2 = nn.Linear(32, 64)
-        self.mlp3 = nn.Linear(64, out_dim)
+        self.mlp1 = nn.Linear(in_dim, 64)
+        self.mlp2 = nn.Linear(64, 128)
+        self.mlp3 = nn.Linear(128, out_dim)
 
         self.gelu = nn.GELU()
 
         self.norm = nn.LayerNorm(in_dim)
-        self.norm1 = nn.LayerNorm(32)
-        self.norm2 = nn.LayerNorm(64)
+        self.norm1 = nn.LayerNorm(64)
+        self.norm2 = nn.LayerNorm(128)
         self.norm3 = nn.LayerNorm(out_dim)
 
         self.convs = nn.Sequential(BasicConv2d(in_dim, 32, kernel_size=3, padding=1, prob=dropout),
@@ -187,3 +187,28 @@ class RangeRet(nn.Module):
         out = self.head(ret_out)
 
         return out
+
+    def forward_recurrent(self, x):
+        x = self.rem(x)
+
+        x = self.viembed(x)
+        #print('patches: ', x.shape)
+
+        s0 = torch.zeros(self.layers, self.num_head, 1, self.hidden_dim // self.num_head, self.hidden_dim // self.num_head * 2).cuda()
+
+        xs = []
+
+        for i in range(x.shape[1]):
+            #print(i)
+            xn, sn = self.retnet.forward_recurrent(x[:, i].unsqueeze(0), s0, i)
+            xs.append(xn)
+            s0 = sn
+
+        x = torch.cat(xs, dim=1)
+        #print(x.size())
+
+        x = torch.reshape(x, (x.shape[0], self.patched_image[0], self.patched_image[1], x.shape[2]))
+
+        x = self.head(x)
+
+        return x

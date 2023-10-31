@@ -72,7 +72,7 @@ class SimpleRetention(nn.Module):
         K = (x_n @ self.W_K)
 
         Q = self.xpos(Q, n+1)
-        K = self.xpos(K, n+1, downscale=True)
+        K = self.xpos(K, n+1, downscale=True).squeeze()
 
         V = x_n @ self.W_V
 
@@ -80,8 +80,13 @@ class SimpleRetention(nn.Module):
         # V: (batch_size, 1, v_dim)
         # s_n = gamma * s_n_1 + K^T @ V
 
-        s_n = self.gamma * s_n_1 + (K.transpose(-1, -2) @ V)
-        
+        #print(s_n_1.size())
+
+        #s_n = self.gamma * s_n_1 + (K.transpose(-1, -2) @ V)
+        s_n = self.gamma * s_n_1 + torch.outer(K, V.squeeze())
+
+        #print(s_n.size())
+
         return (Q @ s_n), s_n
     
     def forward_chunkwise(self, x_i, r_i_1, i):
@@ -184,7 +189,7 @@ class MultiScaleRetention(nn.Module):
         s_n_1s: (batch_size, heads, head_size, head_size)
 
         """
-    
+        #print(x_n.shape)
         # apply each individual retention mechanism to a slice of X
         Y = []
         s_ns = []
