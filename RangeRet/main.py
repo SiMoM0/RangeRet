@@ -19,6 +19,7 @@ from utils.knn import KNN
 from dataloader.kitti.parser import Parser
 from utils.lovasz_loss import Lovasz_loss
 from utils.focal_loss import FocalLoss
+from utils.lion_optimizer import Lion
 
 from network.rangeret import RangeRet
 
@@ -104,6 +105,7 @@ focal_criterion = FocalLoss(ignore_index=0).to(device)
 
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
+#optimizer = Lion(model.parameters(), lr=1e-4, weight_decay=1e-2)
 # scheduler
 scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train_params']['num_epochs'], pct_start=0.02)
 #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['train_params']['num_epochs'] - 4, eta_min=1e-5)

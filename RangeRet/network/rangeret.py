@@ -22,27 +22,15 @@ class BasicConv2d(nn.Module):
         x = self.gelu(x)
         return x
 
-# TODO unofficial RangeFormer implementation uses Conv2D
 class REM(nn.Module):
     '''
     Range Embedding Module: map each point in the range image to a
-    higher-dim embedding (128) using 3 MLP layers
+    higher-dim embedding (128) using 3 BasicConv2d layers
     '''
     def __init__(self, in_dim, out_dim, dropout=0.0):
         super(REM, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
-
-        self.mlp1 = nn.Linear(in_dim, 64)
-        self.mlp2 = nn.Linear(64, 128)
-        self.mlp3 = nn.Linear(128, out_dim)
-
-        self.gelu = nn.GELU()
-
-        self.norm = nn.LayerNorm(in_dim)
-        self.norm1 = nn.LayerNorm(64)
-        self.norm2 = nn.LayerNorm(128)
-        self.norm3 = nn.LayerNorm(out_dim)
 
         self.convs = nn.Sequential(BasicConv2d(in_dim, 32, kernel_size=3, padding=1, prob=dropout),
                                 BasicConv2d(32, 64, kernel_size=3, padding=1, prob=dropout),
@@ -55,23 +43,11 @@ class REM(nn.Module):
         '''
         x: (H, W, in_dim) range image
         '''
-        # TODO normalize data ?
+
         x = x.permute(0, 3, 1, 2) # for conv2d REM (B, C, H, W)
         #x = self.dropout(x)
         x = self.inorm(x)
         x = self.convs(x)
-        
-        #x = self.norm(x)
-        #x = self.mlp1(x)
-        #x = self.norm1(x)
-        #x = self.gelu(x)
-        #x = self.mlp2(x)
-        #x = self.norm2(x)
-        #x = self.gelu(x)
-        #x = self.mlp3(x)
-        #x = self.norm3(x)
-        #x = self.gelu(x)
-        # TODO add some batch normalization or dropout ?
 
         return x
 
@@ -79,7 +55,7 @@ class SemanticHead(nn.Module):
     '''
     Semantic Head: two MLP layers to map feature dimension into number of classes
     '''
-    def __init__(self, in_dim, hidden_dim, height, width, num_classes):
+    def __init__(self, in_dim, hidden_dim, height, width, num_classes, dropout=0.0):
         super(SemanticHead, self).__init__()
         self.height = height
         self.width = width
@@ -87,22 +63,9 @@ class SemanticHead(nn.Module):
         self.mlp1 = nn.Linear(in_dim, hidden_dim)
         self.gelu = nn.GELU()
         self.mlp2 = nn.Linear(hidden_dim, num_classes)
-        #self.softmax = nn.Softmax(-1)
 
         self.norm = nn.LayerNorm(hidden_dim)
-        self.dropout = nn.Dropout(p=0.15)
-
-        #self.conv = nn.Conv2d(hidden_dim, num_classes, kernel_size=1)
-
-        self.conv1 = BasicConv2d(in_dim, hidden_dim, kernel_size=3, padding=1)
-        self.conv2 = BasicConv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(hidden_dim, num_classes, kernel_size=3, stride=1, padding=1, dilation=1)
-
-        #self.deconv = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
-        #self.deconv2 = nn.ConvTranspose2d(in_dim, in_dim, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
-
-        #self.conv1 = nn.Conv2d(in_dim, hidden_dim, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        #self.conv2 = nn.Conv2d(hidden_dim, num_classes, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x):
         # reshape to (B, C, H, W)
@@ -110,16 +73,6 @@ class SemanticHead(nn.Module):
         # bilinear interpolation
         # TODO refactor if batch size is greater than 1
         x = torch.nn.functional.interpolate(x, size=(self.height, self.width), mode='bilinear')
-        
-        # deconv approach
-        #x = self.deconv(x)
-        #print(x.shape)
-        #x = self.deconv(x)
-        #print(x.shape)
-        
-        #x = self.conv1(x)
-        #x = self.conv2(x)
-        #x = self.conv3(x)
 
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
@@ -130,15 +83,6 @@ class SemanticHead(nn.Module):
         #x = self.dropout(x)
         x = self.gelu(x)
         x = self.mlp2(x)
-        
-        # conv2d as last layer
-        #x = x.permute(0, 3, 1, 2)
-        #x = self.conv(x)
-        #x = x.permute(0, 2, 3, 1)
-        
-        #out = self.softmax(x3) # TODO use softmax only for NLL
-
-        # TODO add dropout or batchnorm ?
 
         return x
 
@@ -176,9 +120,6 @@ class RangeRet(nn.Module):
     def forward(self, x):
         # TODO for better performance dont use different vars
         rem_out = self.rem(x)
-
-        # reshape to (B, C, H, W)
-        #rem_out = rem_out.permute(0, 3, 1, 2)
 
         patches = self.viembed(rem_out)
 
