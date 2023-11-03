@@ -52,7 +52,7 @@ model_params = config['model_params']
 parser = Parser(root=dataset_folder,
                 train_sequences=data_config["split"]["train"],
                 valid_sequences=data_config["split"]["valid"],
-                test_sequences=None,
+                test_sequences=data_config["split"]["test"],
                 labels=data_config["labels"],
                 color_map=data_config["color_map"],
                 learning_map=data_config["learning_map"],
@@ -98,7 +98,7 @@ def infer(data_loader, to_original):
                 os.mkdir(seq_folder)
 
             in_vol = in_vol.cuda()
-            proj_labels = proj_labels.cuda()
+            #proj_labels = proj_labels.cuda()
             p_x = p_x.cuda()
             p_y = p_y.cuda()
 
@@ -138,12 +138,13 @@ def infer(data_loader, to_original):
             pred_np = unproj_argmax.cpu().detach().numpy()
             pred_np = pred_np.reshape((-1)).astype(np.int32)
 
-            # populate confusion matrix (iou between predicted point cloud and original labels)
-            unproj_labels = unproj_labels.cpu().detach().numpy()
-            idxs = tuple(np.stack((pred_np, unproj_labels.reshape(-1)), axis=0))
-            np.add.at(conf_matrix, idxs, 1)
+            if split != 'test':
+                # populate confusion matrix (iou between predicted point cloud and original labels)
+                unproj_labels = unproj_labels.cpu().detach().numpy()
+                idxs = tuple(np.stack((pred_np, unproj_labels.reshape(-1)), axis=0))
+                np.add.at(conf_matrix, idxs, 1)
 
-            unique_gt |= set(np.unique(unproj_labels))
+                unique_gt |= set(np.unique(unproj_labels))
 
             # back to original labels
             preds = to_original(pred_np)
