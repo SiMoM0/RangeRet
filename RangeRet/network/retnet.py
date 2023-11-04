@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 
@@ -20,6 +21,8 @@ class RetNet(nn.Module):
         self.ffn_size = ffn_size
         self.heads = heads
         self.img_dim = img_dim
+        self.gammas = (1 - torch.exp(torch.linspace(math.log(1/32), math.log(1/512), heads))).detach().cpu().tolist()
+        self.D = [self._get_D(img_dim[0] * img_dim[1], g).cuda() for g in self.gammas]
 
         self.retentions = nn.ModuleList([
             MultiScaleRetention(hidden_dim, heads, double_v_dim, img_dim[0] * img_dim[1])
@@ -43,13 +46,24 @@ class RetNet(nn.Module):
             nn.LayerNorm(hidden_dim)
             for _ in range(layers)
         ])
+
+    def _get_D(self, sequence_length, gamma):
+        n = torch.arange(sequence_length).unsqueeze(1)
+        m = torch.arange(sequence_length).unsqueeze(0)
+
+        # Broadcast self.gamma ** (n - m) with appropriate masking to set values where n < m to 0
+        D = (gamma ** (n - m)) * (n >= m).float()  #this results in some NaN when n is much larger than m
+        # fill the NaN with 0
+        D[D != D] = 0
+
+        return D
     
     def forward(self, x):
         """
         X: (batch_size, number of patches, number of features)
         """
         for i in range(self.layers):
-            y = self.retentions[i](self.layer_norms_1[i](x)) + x
+            y = self.retentions[i](self.layer_norms_1[i](x), self.D) + x
 
             x = self.ffns[i](self.layer_norms_2[i](y)) + y
 

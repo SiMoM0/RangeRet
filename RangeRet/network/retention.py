@@ -26,7 +26,7 @@ class SimpleRetention(nn.Module):
         #self.wk = nn.Linear(hidden_size, head_size, bias=False)
         #self.wv = nn.Linear(hidden_size, self.v_dim, bias=False)
         
-        self.D = self._get_D(num_patches).cuda()
+        #self.D = self._get_D(num_patches).cuda()
 
         self.xpos = XPOS(head_size)
 
@@ -37,7 +37,7 @@ class SimpleRetention(nn.Module):
         nn.init.xavier_uniform_(self.wk.weight, gain=2 ** -2.5)
         nn.init.xavier_uniform_(self.wv.weight, gain=2 ** -2.5)
 
-    def forward(self, x):
+    def forward(self, x, D):
         '''
         Parallel (default) representation of the retention mechanism.\n
         ```x```: (batch_size, number of patches, number of features) ex: (B, H*W/(p**2), 128)
@@ -56,7 +56,7 @@ class SimpleRetention(nn.Module):
 
         V = x @ self.W_V
         #V = self.wv(x)
-        ret = (Q @ K.permute(0, 2, 1)) * self.D.unsqueeze(0)
+        ret = (Q @ K.permute(0, 2, 1)) * D.unsqueeze(0)
         #ret = torch.matmul(Q, K.permute(0, 2, 1)) * self.D.unsqueeze(0)
         
         return ret @ V
@@ -164,7 +164,7 @@ class MultiScaleRetention(nn.Module):
         nn.init.xavier_uniform_(self.wg.weight, gain=2 ** -2.5)
         nn.init.xavier_uniform_(self.wo.weight)
 
-    def forward(self, x):
+    def forward(self, x, D):
         """
         parallel representation of the multi-scale retention mechanism
         """
@@ -173,7 +173,7 @@ class MultiScaleRetention(nn.Module):
         Y = []
         for i in range(self.heads):
             #print('single retention')
-            Y.append(self.retentions[i](x))
+            Y.append(self.retentions[i](x, D[i]))
         
         Y = torch.cat(Y, dim=2)
         Y_shape = Y.shape
