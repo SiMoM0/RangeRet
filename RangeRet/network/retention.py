@@ -14,6 +14,7 @@ class SimpleRetention(nn.Module):
 
         self.hidden_size = hidden_size  # d_model
         self.head_size = head_size      # d_head
+        self.scaling = self.head_size ** -0.5
 
         self.v_dim = head_size * 2 if double_v_dim else head_size
         self.gamma = gamma
@@ -48,6 +49,9 @@ class SimpleRetention(nn.Module):
         Q = (x @ self.W_Q)
         K = (x @ self.W_K)
 
+        # K normalization
+        K *= self.scaling
+
         #Q = self.wq(x)
         #K = self.wk(x)
 
@@ -58,6 +62,9 @@ class SimpleRetention(nn.Module):
         #V = self.wv(x)
         ret = (Q @ K.permute(0, 2, 1)) * D.unsqueeze(0)
         #ret = torch.matmul(Q, K.permute(0, 2, 1)) * self.D.unsqueeze(0)
+
+        # invariant after normalization
+        ret = ret / ret.detach().sum(dim=-1, keepdim=True).abs().clamp(min=1)
         
         return ret @ V
         

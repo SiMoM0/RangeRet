@@ -56,6 +56,9 @@ class RetNet(nn.Module):
         # fill the NaN with 0
         D[D != D] = 0
 
+        # normalization
+        D = D / D.sum(dim=-1, keepdim=True).sqrt()
+
         return D
     
     def forward(self, x):
