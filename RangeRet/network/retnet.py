@@ -2,7 +2,8 @@ import math
 import torch
 import torch.nn as nn
 
-from network.retention import MultiScaleRetention
+#from network.retention import MultiScaleRetention
+from network.msr import MultiScaleRetention
 
 class RetNet(nn.Module):
     '''
@@ -21,8 +22,10 @@ class RetNet(nn.Module):
         self.ffn_size = ffn_size
         self.heads = heads
         self.img_dim = img_dim
+        self.slen = img_dim[0] * img_dim[1]
         self.gammas = (1 - torch.exp(torch.linspace(math.log(1/32), math.log(1/512), heads))).detach().cpu().tolist()
-        self.D = [self._get_D(img_dim[0] * img_dim[1], g).cuda() for g in self.gammas]
+        #self.D = [self._get_D(img_dim[0] * img_dim[1], g).cuda() for g in self.gammas]
+        self.retnet_rel_pos = self.get_rel_pos()
 
         self.retentions = nn.ModuleList([
             MultiScaleRetention(hidden_dim, heads, double_v_dim, img_dim[0] * img_dim[1])
@@ -60,13 +63,30 @@ class RetNet(nn.Module):
         D = D / D.sum(dim=-1, keepdim=True).sqrt()
 
         return D
-    
+
+    def get_rel_pos(self):
+        angle = 1.0 / (10000 ** torch.linspace(0, 1, self.hidden_dim // self.heads // 2)).cuda()
+        angle = angle.unsqueeze(-1).repeat(1, 2).flatten()
+        decay = torch.log(1 - 2 ** (-5 - torch.arange(self.heads, dtype=torch.float))).cuda()
+
+        index = torch.arange(self.slen).to(decay)
+        sin = torch.sin(index[:, None] * angle[None, :])
+        cos = torch.cos(index[:, None] * angle[None, :])
+        mask = torch.tril(torch.ones(self.slen, self.slen).to(decay))
+        mask = torch.masked_fill(index[:, None] - index[None, :], ~mask.bool(), float("inf"))
+        mask = torch.exp(mask * decay[:, None, None])
+        mask = torch.nan_to_num(mask)
+        mask = mask / mask.sum(dim=-1, keepdim=True).sqrt()
+        retention_rel_pos = ((sin, cos), mask)
+
+        return retention_rel_pos
+
     def forward(self, x):
         """
         X: (batch_size, number of patches, number of features)
         """
         for i in range(self.layers):
-            y = self.retentions[i](self.layer_norms_1[i](x), self.D) + x
+            y = self.retentions[i](self.layer_norms_1[i](x), self.retnet_rel_pos) + x
 
             x = self.ffns[i](self.layer_norms_2[i](y)) + y
 
