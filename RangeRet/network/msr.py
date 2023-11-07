@@ -36,7 +36,8 @@ class MultiScaleRetention(nn.Module):
         self.g_proj = nn.Linear(self.hidden_size, self.v_dim, bias=False)
         self.out_proj = nn.Linear(self.v_dim, hidden_size, bias=False)
 
-        self.group_norm = nn.GroupNorm(self.heads, self.v_dim)
+        #self.group_norm = nn.GroupNorm(self.heads, self.v_dim)
+        self.group_norm = RMSNorm(self.head_size, eps=1e-5, elementwise_affine=False)
 
         self.reset_parameters()
 
@@ -78,10 +79,30 @@ class MultiScaleRetention(nn.Module):
 
         output = self.parallel_forward(qr, kr, v, inner_mask)
 
-        output = self.group_norm(output.reshape(seq_len, self.head_size * self.heads)).reshape(bsz, seq_len, self.head_size * self.heads)
+        #output = self.group_norm(output.reshape(seq_len, self.head_size * self.heads)).reshape(bsz, seq_len, self.head_size * self.heads)
+        output = self.group_norm(output).reshape(bsz, seq_len, self.head_size * self.heads)
 
         output = self.swish(g) * output
 
         output = self.out_proj(output)
 
+        return output
+
+class RMSNorm(nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-6, elementwise_affine=True):
+        super().__init__()
+        self.eps = eps
+        self.elementwise_affine = elementwise_affine
+        if self.elementwise_affine:
+            self.weight = nn.Parameter(torch.ones(dim))
+        else:
+            self.register_parameter('weight', None)
+
+    def _norm(self, x):
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x):
+        output = self._norm(x.float()).type_as(x)
+        if self.weight is not None:
+            output = output * self.weight
         return output
