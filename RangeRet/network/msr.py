@@ -61,7 +61,27 @@ class MultiScaleRetention(nn.Module):
         output = output.transpose(1, 2)
         return output
 
-    def forward(self, x, rel_pos):
+    def recurrent_forward(self, qr, kr, v, decay, incremental_state):
+        bsz = v.size(0)
+
+        v = v.view(bsz, self.heads, self.head_size, 1)
+        kv = kr * v
+        if "prev_key_value" in incremental_state:
+            prev_kv = incremental_state["prev_key_value"]
+            prev_scale = incremental_state["scale"]
+            scale = prev_scale * decay + 1
+            kv = prev_kv * (prev_scale.sqrt() * decay / scale.sqrt()).view(self.heads, 1, 1) + kv / scale.sqrt().view(self.heads, 1, 1)
+            # kv = prev_kv * decay.view(self.num_heads, 1, 1) + kv
+        else:
+            scale = torch.ones_like(decay)
+
+        incremental_state["prev_key_value"] = kv
+        incremental_state["scale"] = scale
+
+        output = torch.sum(qr * kv, dim=3)
+        return output
+
+    def forward(self, x, rel_pos, incremental_state=None):
         bsz, seq_len, _ = x.size()
         (sin, cos), inner_mask = rel_pos
 
@@ -77,7 +97,10 @@ class MultiScaleRetention(nn.Module):
         qr = theta_shift(q, sin, cos)
         kr = theta_shift(k, sin, cos)
 
-        output = self.parallel_forward(qr, kr, v, inner_mask)
+        if incremental_state is not None:
+            output = self.recurrent_forward(qr, kr, v, inner_mask, incremental_state)
+        else:
+            output = self.parallel_forward(qr, kr, v, inner_mask)
 
         #output = self.group_norm(output.reshape(seq_len, self.head_size * self.heads)).reshape(bsz, seq_len, self.head_size * self.heads)
         output = self.group_norm(output).reshape(bsz, seq_len, self.head_size * self.heads)

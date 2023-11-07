@@ -89,7 +89,6 @@ def infer(data_loader, to_original):
     unique_gt = set()
 
     with torch.no_grad():
-        #for i, data in enumerate(zip(range_images, labels_images)):
         for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(data_loader), total=len(data_loader)):
 
             seq_folder = os.path.join(prediction_path, path_seq[0])
@@ -105,7 +104,7 @@ def infer(data_loader, to_original):
             #print(in_vol) # (B, H, W, C)
 
             outputs = model(in_vol) # input format (B, H, W, C)
-            #outputs = model.forward_recurrent(in_vol) # input format (B, H, W, C)
+            #outputs = model.recurrent(in_vol) # input format (B, H, W, C)
 
             #print('outputs shape: ', outputs.shape)
             #print('labels shape: ', labels_images[i].shape)

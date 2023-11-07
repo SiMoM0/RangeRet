@@ -87,7 +87,7 @@ class SemanticHead(nn.Module):
         return x
 
 class RangeRet(nn.Module):
-    def __init__(self, model_params: dict):
+    def __init__(self, model_params: dict, activate_recurrent=False):
         super(RangeRet, self).__init__()
         self.H = model_params['H']
         self.W = model_params['W']
@@ -113,7 +113,7 @@ class RangeRet(nn.Module):
         
         self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
-        self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
+        self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim, activate_recurrent) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
         # TODO set 4 decoders as the number of stages for downsampling
         self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
     
@@ -147,6 +147,26 @@ class RangeRet(nn.Module):
 
         x = torch.cat(xs, dim=1)
         #print(x.size())
+
+        x = torch.reshape(x, (x.shape[0], self.patched_image[0], self.patched_image[1], x.shape[2]))
+
+        x = self.head(x)
+
+        return x
+
+    def recurrent(self, x):
+        x = self.rem(x)
+
+        x = self.viembed(x)
+
+        incremental_state = {}
+        outputs = []
+
+        for i in range(x.shape[1]):
+            o = self.retnet(x[:, i].unsqueeze(0), incremental_state)
+            outputs.append(o)
+
+        x = torch.cat(outputs, dim=1)
 
         x = torch.reshape(x, (x.shape[0], self.patched_image[0], self.patched_image[1], x.shape[2]))
 
