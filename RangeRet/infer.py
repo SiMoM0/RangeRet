@@ -75,6 +75,22 @@ try:
 except:
     # load model from checkpoint
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
+
+# count number of parameters
+#print('Total params: ', sum(p.numel() for p in model.parameters()))
+#print('Total params: ', sum(p.numel() for p in model.parameters() if p.requires_grad))
+
+#total_params = 0
+#for name, parameter in model.named_parameters():
+#    if not parameter.requires_grad:
+#        continue
+#    params = parameter.numel()
+#    print(f'{name} : {params}')
+#    total_params += params
+#
+#print(f'Total Trainable Params: {total_params}')
+#exit()
+
 model.eval()
 
 # print parameters
