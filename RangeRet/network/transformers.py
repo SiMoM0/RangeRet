@@ -91,7 +91,7 @@ class MultiHeadAttention(nn.Module):
         att = torch.bmm(q, k.transpose(1, 2))
 
         att = F.softmax(att, dim=-1, dtype=torch.float32).type_as(att)
-        att *= self.scaling
+        att = att * self.scaling
 
         att = torch.bmm(att, v)
         att = att.transpose(0, 1).reshape(seq_len, bsz, self.hidden_size).transpose(0, 1)
