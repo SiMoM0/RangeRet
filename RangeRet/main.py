@@ -14,6 +14,7 @@ import numpy as np
 from torch import nn
 from tqdm import tqdm
 from datetime import datetime
+import torch.nn.functional as F
 
 from utils.knn import KNN
 from dataloader.kitti.parser import Parser
@@ -159,17 +160,18 @@ def train_one_epoch(train_loader, epoch_index):
         #print('labels shape ', gt.shape)
 
         # loss between range images
-        #loss = loss_fn(predictions, proj_labels.cuda(non_blocking=True).long())
-        #loss.backward()
+        ce_loss = ce_criterion(predictions, proj_labels.cuda(non_blocking=True).long())
+        lovasz_loss = lovasz_criterion(F.softmax(predictions, dim=1), proj_labels.cuda(non_blocking=True).long())
+        focal_loss = focal_criterion(predictions, proj_labels.cuda(non_blocking=True).long())
 
         # loss between point clouds
-        preds = outputs[0][p_y, p_x]
+        #preds = outputs[0][p_y, p_x]
         #print(unproj_labels.shape)
-        ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-        
-        loss = ce_loss + focal_loss + lovasz_loss
+        #ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+        #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+
+        loss = ce_loss + focal_loss + 1.5 * lovasz_loss
 
         #ce_loss.backward()
         #lovasz_loss.backward()
@@ -186,21 +188,21 @@ def train_one_epoch(train_loader, epoch_index):
         running_loss += loss.item()
 
         # populate confusion matrix
-        #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
-        #np.add.at(conf_matrix, idxs, 1)
+        idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+        np.add.at(conf_matrix, idxs, 1)
 
         # TODO put in original pointcloud using indexes and compute loss between whole point cloud labels 
-        unproj_argmax = proj_argmax[p_y, p_x]
+        #unproj_argmax = proj_argmax[p_y, p_x]
         #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
         #print(unproj_argmax.shape)
         #print(unproj_labels.shape)
 
-        pred_np = unproj_argmax.cpu().detach().numpy()
-        pred_np = pred_np.reshape((-1)).astype(np.int32)
+        #pred_np = unproj_argmax.cpu().detach().numpy()
+        #pred_np = pred_np.reshape((-1)).astype(np.int32)
 
         # populate confusion matrix (iou between predicted point cloud and original labels)
-        idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
-        np.add.at(conf_matrix, idxs, 1)
+        #idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
+        #np.add.at(conf_matrix, idxs, 1)
 
     # print final predictions
     # np.savetxt(f'pred{epoch_index}.txt', torch.argmax(predictions, dim=1).cpu().detach().numpy()[0], fmt="%d")
@@ -259,14 +261,19 @@ def validate(val_loader):
             #print('predictions shape ', predictions.shape)
             #print('labels shape ', gt.shape)
 
-            preds = outputs[0][p_y, p_x]
+            # loss between images
+            ce_loss = ce_criterion(predictions, proj_labels.cuda(non_blocking=True).long())
+            lovasz_loss = lovasz_criterion(F.softmax(predictions, dim=1), proj_labels.cuda(non_blocking=True).long())
+            focal_loss = focal_criterion(predictions, proj_labels.cuda(non_blocking=True).long())
+
+            #preds = outputs[0][p_y, p_x]
 
             #loss = loss_fn(torch.log(predictions.clamp(min=1e-8)), gt.cuda(non_blocking=True))
-            ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-            lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
-            focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+            #ce_loss = ce_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+            #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
+            #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
 
-            loss = ce_loss + focal_loss + lovasz_loss
+            loss = ce_loss + focal_loss + 1.5 * lovasz_loss
 
             #val_loss += ce_loss.item()
             #val_loss += lovasz_loss.item()
@@ -274,20 +281,20 @@ def validate(val_loader):
             val_loss += loss.item()
 
             # populate confusion matrix
-            #idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
-            #np.add.at(conf_matrix, idxs, 1)
+            idxs = tuple(np.stack((proj_argmax.reshape(-1, 1).cpu().detach().numpy(), proj_labels.reshape(-1, 1).cpu().detach().numpy()), axis=0))
+            np.add.at(conf_matrix, idxs, 1)
 
             # put in original pointcloud using indexes or knn
-            unproj_argmax = proj_argmax[p_y, p_x]
+            #unproj_argmax = proj_argmax[p_y, p_x]
             #unproj_argmax = knn(proj_range, unproj_range, proj_argmax, p_x, p_y)
             #print(unproj_argmax.shape)
 
-            pred_np = unproj_argmax.cpu().detach().numpy()
-            pred_np = pred_np.reshape((-1)).astype(np.int32)
+            #pred_np = unproj_argmax.cpu().detach().numpy()
+            #pred_np = pred_np.reshape((-1)).astype(np.int32)
 
             # populate confusion matrix (iou between predicted point cloud and original labels)
-            idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
-            np.add.at(conf_matrix, idxs, 1)
+            #idxs = tuple(np.stack((pred_np, unproj_labels.cpu().detach().numpy().reshape(-1)), axis=0))
+            #np.add.at(conf_matrix, idxs, 1)
 
             #np.savetxt('pc_predicitons.txt', pred_np)
 

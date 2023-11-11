@@ -213,8 +213,10 @@ def flatten_probas(probas, labels, ignore=None):
         # 3D segmentation
         B, C, L, H, W = probas.size()
         probas = probas.contiguous().permute(0, 2, 3, 4, 1).contiguous().view(-1, C)
-    # B, C, H, W = probas.size()
-    # probas = probas.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
+    else:
+        # 2d segmentation
+        B, C, H, W = probas.size()
+        probas = probas.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
     labels = labels.view(-1)
     if ignore is None:
         return probas, labels
