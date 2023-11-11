@@ -23,7 +23,7 @@ def global_rotation(scan):
 
 def random_jitter(scan, rate=0.3):
     jitter = np.clip(np.random.normal(0, rate, 3), -3 * rate, 3 * rate)
-    scan += jitter
+    scan[:, :3] += jitter
 
     return scan
 

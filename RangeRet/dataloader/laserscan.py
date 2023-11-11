@@ -4,6 +4,8 @@
 
 import numpy as np
 
+from dataloader.augmentation import augmentation
+
 
 class LaserScan:
   """Class that contains LaserScan with x,y,z,r"""
@@ -75,6 +77,9 @@ class LaserScan:
     # if all goes well, open pointcloud
     scan = np.fromfile(filename, dtype=np.float32)
     scan = scan.reshape((-1, 4))
+
+    # TODO point cloud augmentation
+    #scan = augmentation(scan)
 
     # put in attribute
     points = scan[:, 0:3]    # get xyz

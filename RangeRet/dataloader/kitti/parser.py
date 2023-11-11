@@ -3,6 +3,7 @@
 import os
 import numpy as np
 import torch
+import random
 from torch.utils.data import Dataset
 from dataloader.laserscan import LaserScan, SemLaserScan
 
@@ -185,6 +186,12 @@ class SemanticKitti(Dataset):
 
     # reshape proj from (C, H, W) to (H, W, C) if REM has linear layers
     proj = proj.permute(1, 2, 0)
+
+    # TODO shift augmentation
+    #proj_, proj_labels_ = proj.copy(), proj_labels.copy()
+    #p = random.randint(int(0.25*self.sensor_img_W), int(0.75*self.sensor_img_W))
+    #proj_ = np.concatenate(proj_[:, p:, :], proj_[:, :p, :], axis=1)
+    #proj_labels_ = np.concatenate(proj_labels_[p:, :], proj_labels_[:p, :], axis=1)
 
     # return
     return proj, proj_mask, proj_labels, unproj_labels, path_seq, path_name, proj_x, proj_y, proj_range, unproj_range, proj_xyz, unproj_xyz, proj_remission, unproj_remissions, unproj_n_points
