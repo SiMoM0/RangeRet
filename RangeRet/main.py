@@ -171,7 +171,7 @@ def train_one_epoch(train_loader, epoch_index):
         #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
         #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
 
-        loss = ce_loss + focal_loss + 1.5 * lovasz_loss
+        loss = ce_loss + focal_loss + lovasz_loss
 
         #ce_loss.backward()
         #lovasz_loss.backward()
@@ -273,7 +273,7 @@ def validate(val_loader):
             #lovasz_loss = lovasz_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
             #focal_loss = focal_criterion(preds.permute(0, 2, 1), unproj_labels.cuda(non_blocking=True).long())
 
-            loss = ce_loss + focal_loss + 1.5 * lovasz_loss
+            loss = ce_loss + focal_loss + lovasz_loss
 
             #val_loss += ce_loss.item()
             #val_loss += lovasz_loss.item()
