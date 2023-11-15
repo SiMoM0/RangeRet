@@ -56,7 +56,7 @@ class MultiHeadAttention(nn.Module):
         self.head_size = self.v_dim // heads
         self.key_dim = self.hidden_size // self.heads
 
-        self.scaling = self.head_size ** -0.5
+        self.scaling = self.key_dim ** -0.5
 
         self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
         self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
