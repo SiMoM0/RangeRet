@@ -1,7 +1,6 @@
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from utils.xpos import XPOS
 
@@ -38,8 +37,8 @@ class Transformers(nn.Module):
     def forward(self, x):
 
         for i in range(self.layers):
-            y = self.layer_norms_1[i](x + self.attentions[i](x))
-            x = self.layer_norms_2[i](y + self.ffns[i](y))
+            y = self.attentions[i](self.layer_norms_1[i](x)) + x
+            x = self.ffns[i](self.layer_norms_2[i](y)) + y
 
         # reshape
         x = torch.reshape(x, (x.shape[0], self.img_dim[0], self.img_dim[1], x.shape[2]))
@@ -88,12 +87,12 @@ class MultiHeadAttention(nn.Module):
         q = self.xpos(q)
         k = self.xpos(k)
 
-        att = torch.bmm(q, k.transpose(1, 2))
-
-        att = F.softmax(att, dim=-1, dtype=torch.float32).type_as(att)
+        att = q @ k.transpose(1, 2)
         att = att * self.scaling
 
-        att = torch.bmm(att, v)
+        att = att.softmax(dim=-1)
+
+        att = att @ v
         att = att.transpose(0, 1).reshape(seq_len, bsz, self.v_dim).transpose(0, 1)
 
         att = self.out_proj(att)
