@@ -106,7 +106,7 @@ print("Loss weights from content: ", loss_w.data)
 # TODO use focal loss, lovasz loss
 ce_criterion = nn.CrossEntropyLoss(ignore_index=0, weight=loss_w).to(device)
 lovasz_criterion = Lovasz_loss(ignore=0).to(device)
-focal_criterion = FocalLoss(ignore_index=0).to(device)
+focal_criterion = FocalLoss(gamma=2.0, ignore_index=0).to(device) # TODO set gamma=2.0
 #nll_criterion = nn.NLLLoss(ignore_index=0).to(device)
 
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)

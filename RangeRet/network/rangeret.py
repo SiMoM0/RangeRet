@@ -7,6 +7,8 @@ from torch import nn
 from network.retnet import RetNet
 from utils.vision_embedding import VisionEmbedding
 
+from network.transformers import Transformers
+
 class BasicConv2d(nn.Module):
     def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1, prob=0.0):
         super(BasicConv2d, self).__init__()
@@ -18,6 +20,21 @@ class BasicConv2d(nn.Module):
     def forward(self, x):
         x = self.drop(x)
         x = self.conv(x)
+        x = self.norm(x)
+        x = self.gelu(x)
+        return x
+
+class MLP(nn.Module):
+    def __init__(self, in_dim, out_dim, prob=0.0):
+        super(MLP, self).__init__()
+        self.drop = nn.Dropout(p=prob)
+        self.mlp = nn.Linear(in_dim, out_dim)
+        self.norm = nn.LayerNorm(out_dim)
+        self.gelu = nn.GELU()
+
+    def forward(self, x):
+        x = self.drop(x)
+        x = self.mlp(x)
         x = self.norm(x)
         x = self.gelu(x)
         return x
@@ -39,6 +56,14 @@ class REM(nn.Module):
         self.inorm = nn.InstanceNorm2d(in_dim)
         self.dropout = nn.Dropout2d(p=dropout)
 
+        #self.norm = nn.LayerNorm(in_dim)
+
+        #self.mlp = nn.Sequential(
+        #    MLP(in_dim=in_dim, out_dim=32),
+        #    MLP(in_dim=32, out_dim=64),
+        #    MLP(in_dim=64, out_dim=out_dim)
+        #)
+
     def forward(self, x):
         '''
         x: (H, W, in_dim) range image
@@ -48,6 +73,11 @@ class REM(nn.Module):
         #x = self.dropout(x)
         x = self.inorm(x)
         x = self.convs(x)
+
+        #x = self.norm(x)
+        #x = self.mlp(x)
+
+        #x = x.permute(0, 3, 1, 2)
 
         return x
 
@@ -67,7 +97,7 @@ class SemanticHead(nn.Module):
         self.norm = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x, rem):
+    def forward(self, x):
         # reshape to (B, C, H, W)
         x = x.permute(0, 3, 1, 2)
         # bilinear interpolation
@@ -75,7 +105,7 @@ class SemanticHead(nn.Module):
         x = torch.nn.functional.interpolate(x, size=(self.height, self.width), mode='bilinear')
 
         # residual connection with REM output
-        x = x + rem
+        #x = x + rem
 
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
@@ -119,6 +149,9 @@ class RangeRet(nn.Module):
         self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim, activate_recurrent) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
         # TODO set 4 decoders as the number of stages for downsampling
         self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
+
+        # transformers for ablation study
+        #self.transformers = Transformers(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image)
     
     def forward(self, x):
         # TODO for better performance dont use different vars
@@ -128,7 +161,9 @@ class RangeRet(nn.Module):
 
         ret_out = self.retnet(patches)
 
-        out = self.head(ret_out, rem_out)
+        #ret_out = self.transformers(patches)
+
+        out = self.head(ret_out)
 
         return out
 
