@@ -69,7 +69,6 @@ class REM(nn.Module):
         x: (H, W, in_dim) range image
         '''
 
-        x = x.permute(0, 3, 1, 2) # for conv2d REM (B, C, H, W)
         #x = self.dropout(x)
         x = self.inorm(x)
         x = self.convs(x)

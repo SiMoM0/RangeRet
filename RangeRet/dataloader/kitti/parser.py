@@ -141,14 +141,14 @@ class SemanticKitti(Dataset):
 
     # make a tensor of the uncompressed data (with the max num points)
     unproj_n_points = scan.points.shape[0]
-    unproj_xyz = torch.full((unproj_n_points, 3), -1.0, dtype=torch.float)
+    unproj_xyz = torch.full((self.max_points, 3), -1.0, dtype=torch.float)
     unproj_xyz[:unproj_n_points] = torch.from_numpy(scan.points)
-    unproj_range = torch.full([unproj_n_points], -1.0, dtype=torch.float)
+    unproj_range = torch.full([self.max_points], -1.0, dtype=torch.float)
     unproj_range[:unproj_n_points] = torch.from_numpy(scan.unproj_range)
-    unproj_remissions = torch.full([unproj_n_points], -1.0, dtype=torch.float)
+    unproj_remissions = torch.full([self.max_points], -1.0, dtype=torch.float)
     unproj_remissions[:unproj_n_points] = torch.from_numpy(scan.remissions)
     if self.gt:
-      unproj_labels = torch.full([unproj_n_points], -1.0, dtype=torch.int32)
+      unproj_labels = torch.full([self.max_points], -1.0, dtype=torch.int32)
       unproj_labels[:unproj_n_points] = torch.from_numpy(scan.sem_label)
     else:
       unproj_labels = []
@@ -163,10 +163,9 @@ class SemanticKitti(Dataset):
       proj_labels = proj_labels * proj_mask
     else:
       proj_labels = []
-    # TODO fix proj_x and proj_y shape to the exact number of points in the cloud, not max points
-    proj_x = torch.full([unproj_n_points], -1, dtype=torch.long)
+    proj_x = torch.full([self.max_points], -1, dtype=torch.long)
     proj_x[:unproj_n_points] = torch.from_numpy(scan.proj_x)
-    proj_y = torch.full([unproj_n_points], -1, dtype=torch.long)
+    proj_y = torch.full([self.max_points], -1, dtype=torch.long)
     proj_y[:unproj_n_points] = torch.from_numpy(scan.proj_y)
     proj = torch.cat([proj_range.unsqueeze(0).clone(),
                       proj_xyz.clone().permute(2, 0, 1),
@@ -183,9 +182,6 @@ class SemanticKitti(Dataset):
     # print("path_norm: ", path_norm)
     # print("path_seq", path_seq)
     # print("path_name", path_name)
-
-    # reshape proj from (C, H, W) to (H, W, C) if REM has linear layers
-    proj = proj.permute(1, 2, 0)
 
     # TODO shift augmentation
     #proj_, proj_labels_ = proj.copy(), proj_labels.copy()

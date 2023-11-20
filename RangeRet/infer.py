@@ -105,12 +105,18 @@ def infer(data_loader, to_original):
     unique_gt = set()
 
     with torch.no_grad():
-        for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(data_loader), total=len(data_loader)):
+        for i, (in_vol, _, proj_labels, unproj_labels, path_seq, path_name, p_x, p_y, proj_range, unproj_range, _, _, _, _, npoints) in tqdm(enumerate(data_loader), total=len(data_loader)):
 
             seq_folder = os.path.join(prediction_path, path_seq[0])
             # create sequence folder if it does not exists
             if not os.path.exists(seq_folder):
                 os.mkdir(seq_folder)
+
+            p_x = p_x[0, :npoints]
+            p_y = p_y[0, :npoints]
+            proj_range = proj_range[0, :npoints]
+            unproj_range = unproj_range[0, :npoints]
+            unproj_labels = unproj_labels[0, :npoints]
 
             in_vol = in_vol.cuda()
             #proj_labels = proj_labels.cuda()

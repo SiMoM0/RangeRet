@@ -149,7 +149,7 @@ def train_one_epoch(train_loader, epoch_index):
         predictions = outputs.permute(0, 3, 1, 2)
         #gt = proj_labels.permute(2, 0, 1)
 
-        proj_argmax = predictions[0].argmax(dim=0)
+        proj_argmax = predictions.argmax(dim=1)
         #print(proj_argmax)
         #print(proj_labels)
 
@@ -251,7 +251,7 @@ def validate(val_loader):
             predictions = outputs.permute(0, 3, 1, 2)
             #gt = proj_labels.permute(2, 0, 1)
 
-            proj_argmax = predictions[0].argmax(dim=0)
+            proj_argmax = predictions.argmax(dim=1)
             #print(proj_argmax)
             #print(proj_labels)
 
