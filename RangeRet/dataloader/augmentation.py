@@ -5,9 +5,7 @@ JITTER_RATE = 0.3
 DROP_RATE = 0.1
 
 def random_scale(scan, rate=0.05):
-    scale = np.random.uniform(1, rate)
-    if np.random.random() < 0.5:
-        scale = 1 / scale
+    scale = np.random.uniform(1-rate, 1+rate)
     scan[:, 0] *= scale
     scan[:, 1] *= scale
 
@@ -16,14 +14,14 @@ def random_scale(scan, rate=0.05):
 def global_rotation(scan):
     angle = np.deg2rad(np.random.random() * 360)
     cos, sin = np.cos(angle), np.sin(angle)
-    R = np.matrix([[cos, sin], [-sin, cos]])
+    R = np.array([[cos, sin], [-sin, cos]])
     scan[:, :2] = np.dot(scan[:, :2], R)
 
     return scan
 
 def random_jitter(scan, rate=0.3):
-    jitter = np.clip(np.random.normal(0, rate, 3), -3 * rate, 3 * rate)
-    scan[:, :3] += jitter
+    jitter = np.clip(np.random.normal(0, rate, 2), rate, rate)
+    scan[:, :2] += jitter
 
     return scan
 
