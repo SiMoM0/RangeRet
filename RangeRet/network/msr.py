@@ -109,8 +109,12 @@ class MultiScaleRetention(nn.Module):
         #print(g.size())
 
         k *= self.scaling
-        q = q.view(bsz, seq_len, self.heads, 1, self.key_dim).transpose(1, 2)
-        k = k.view(bsz, seq_len, self.heads, 1, self.key_dim).transpose(1, 2)
+        if incremental_state is None:
+            q = q.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
+            k = k.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
+        else:
+            q = q.view(bsz, seq_len, self.heads, 1, self.key_dim).transpose(1, 2)
+            k = k.view(bsz, seq_len, self.heads, 1, self.key_dim).transpose(1, 2)
 
         #print('Head view')
         #print(q.size())

@@ -129,6 +129,9 @@ def train_one_epoch(train_loader, epoch_index):
     # confusion matrix
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
+    # context
+    context = torch.ones((1, 3825, 128)).cuda()
+
     #for i, data in enumerate(zip(range_images, labels_images)):
     for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
 
@@ -139,7 +142,8 @@ def train_one_epoch(train_loader, epoch_index):
 
         #print(in_vol) # (B, H, W, C)
 
-        outputs = model(in_vol) # input format (B, H, W, C)
+        outputs, ctx = model(in_vol, context) # input format (B, H, W, C)
+        context = ctx.detach()
 
         #print('outputs shape: ', outputs.shape)
         #print('labels shape: ', labels_images[i].shape)
@@ -230,6 +234,9 @@ def validate(val_loader):
     # confusion matrix
     conf_matrix = np.zeros((20, 20), dtype=np.int64)
 
+    # context
+    context = torch.zeros((1, 3825, 128)).cuda()
+
     with torch.no_grad():
         #for i, data in enumerate(zip(range_images, labels_images)):
         for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
@@ -241,7 +248,7 @@ def validate(val_loader):
 
             #print(in_vol) # (B, H, W, C)
 
-            outputs = model(in_vol) # input format (B, H, W, C)
+            outputs, context = model(in_vol, context) # input format (B, H, W, C)
 
             #print('outputs shape: ', outputs.shape)
             #print('labels shape: ', labels_images[i].shape)

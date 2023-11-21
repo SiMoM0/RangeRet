@@ -94,13 +94,16 @@ class RetNet(nn.Module):
 
         return retention_rel_pos
 
-    def forward(self, x, incremental_state=None):
+    def forward(self, x, context, incremental_state=None):
         """
         X: (batch_size, number of patches, number of features)
         """
 
         is_first_step = self.is_first_step(incremental_state)
-    
+
+        context = context.view(1, self.slen, self.hidden_dim)
+        x = x + context
+
         for i in range(self.layers):
             if incremental_state is None or is_first_step:
                 if is_first_step and incremental_state is not None:

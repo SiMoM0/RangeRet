@@ -152,19 +152,19 @@ class RangeRet(nn.Module):
         # transformers for ablation study
         #self.transformers = Transformers(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image)
     
-    def forward(self, x):
+    def forward(self, x, context):
         # TODO for better performance dont use different vars
         rem_out = self.rem(x)
 
         patches = self.viembed(rem_out)
 
-        ret_out = self.retnet(patches)
+        ret_out = self.retnet(patches, context)
 
         #ret_out = self.transformers(patches)
 
         out = self.head(ret_out)
 
-        return out
+        return out, ret_out
 
     def forward_recurrent(self, x):
         x = self.rem(x)
@@ -191,13 +191,10 @@ class RangeRet(nn.Module):
 
         return x
 
-    def recurrent(self, x):
+    def recurrent(self, x, incremental_state):
         x = self.rem(x)
 
         x = self.viembed(x)
-
-        incremental_state = {}
-        outputs = []
 
         #for i in range(x.shape[1]):
         #    o = self.retnet(x[:, i].unsqueeze(0), incremental_state)
