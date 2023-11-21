@@ -85,6 +85,10 @@ class RetNet(nn.Module):
             mask = torch.masked_fill(index[:, None] - index[None, :], ~mask.bool(), float("inf"))
             mask = torch.exp(mask * decay[:, None, None])
             mask = torch.nan_to_num(mask)
+            # create upper triangle
+            mask = mask + mask.transpose(1, 2)
+            mask = mask - torch.eye(self.slen).to(decay)
+            # normalization
             mask = mask / mask.sum(dim=-1, keepdim=True).sqrt()
             retention_rel_pos = ((sin, cos), mask)
 
