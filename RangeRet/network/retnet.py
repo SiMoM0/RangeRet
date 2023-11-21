@@ -26,7 +26,7 @@ class RetNet(nn.Module):
         self.activate_recurrent = activate_recurrent
         self.gammas = (1 - torch.exp(torch.linspace(math.log(1/32), math.log(1/512), heads))).detach().cpu().tolist()
         #self.D = [self._get_D(img_dim[0] * img_dim[1], g).cuda() for g in self.gammas]
-        self.retnet_rel_pos = self.get_rel_pos(self.activate_recurrent)
+        self.retnet_rel_pos = self.get_rel_pos(self.activate_recurrent, manhattan=True)
 
         self.retentions = nn.ModuleList([
             MultiScaleRetention(self.hidden_dim, self.heads, double_v_dim, self.slen)
@@ -65,7 +65,7 @@ class RetNet(nn.Module):
 
         return D
 
-    def get_rel_pos(self, activate_recurrent=False):
+    def get_rel_pos(self, activate_recurrent=False, manhattan=True):
         angle = 1.0 / (10000 ** torch.linspace(0, 1, self.hidden_dim // self.heads // 2)).cuda()
         angle = angle.unsqueeze(-1).repeat(1, 2).flatten()
         decay = torch.log(1 - 2 ** (-5 - torch.arange(self.heads, dtype=torch.float))).cuda()
@@ -77,6 +77,18 @@ class RetNet(nn.Module):
             sin = torch.sin(angle * (self.slen - 1))
             cos = torch.cos(angle * (self.slen - 1))
             retention_rel_pos = ((sin, cos), decay.exp())
+        elif manhattan:
+            index = torch.arange(self.slen).to(decay)
+            sin = torch.sin(index[:, None] * angle[None, :])
+            cos = torch.cos(index[:, None] * angle[None, :])
+            rows = torch.arange(self.slen).to(decay) // self.img_dim[1]
+            cols = torch.arange(self.slen).to(decay) % self.img_dim[1]
+            row_diff = torch.abs(rows[:, None] - rows)
+            col_diff = torch.abs(cols[:, None] - cols)
+            mask = row_diff + col_diff
+            mask = torch.exp(mask * decay[:, None, None])
+            mask = mask / mask.sum(dim=-1, keepdim=True).sqrt()
+            retention_rel_pos = ((sin, cos), mask)
         else:
             index = torch.arange(self.slen).to(decay)
             sin = torch.sin(index[:, None] * angle[None, :])
