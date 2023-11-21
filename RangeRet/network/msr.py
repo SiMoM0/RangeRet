@@ -5,8 +5,12 @@ import torch
 from torch import nn
 
 def rotate_every_two(x):
-    x1 = x[:, :, :, ::2]
-    x2 = x[:, :, :, 1::2]
+    if x.dim() == 5:
+        x1 = x[:, :, :, :, ::2]
+        x2 = x[:, :, :, :, 1::2]
+    else:
+        x1 = x[:, :, :, ::2]
+        x2 = x[:, :, :, 1::2]
     x = torch.stack((-x2, x1), dim=-1)
     return x.flatten(-2)  # in einsum notation: rearrange(x, '... d j -> ... (d j)')\
 
@@ -62,26 +66,34 @@ class MultiScaleRetention(nn.Module):
         return output
 
     def recurrent_forward(self, qr, kr, v, decay, incremental_state):
-        bsz = v.size(0)
+        bsz, slen, _ = v.size()
 
-        v = v.view(bsz, self.heads, self.head_size, 1)
+        #print('Decay = ', decay.size())
+
+        v = v.view(bsz, self.heads, slen, self.head_size, 1)
+        #print('V = ', v.size())
         kv = kr * v
+        #print('KV = ', kv.size())
         if "prev_key_value" in incremental_state:
             prev_kv = incremental_state["prev_key_value"]
             prev_scale = incremental_state["scale"]
             scale = prev_scale * decay + 1
-            kv = prev_kv * (prev_scale.sqrt() * decay / scale.sqrt()).view(self.heads, 1, 1) + kv / scale.sqrt().view(self.heads, 1, 1)
+            kv = prev_kv * (prev_scale.sqrt() * decay / scale.sqrt()).view(self.heads, slen, 1, 1) + kv / scale.sqrt().view(self.heads, slen, 1, 1)
             # kv = prev_kv * decay.view(self.num_heads, 1, 1) + kv
         else:
             scale = torch.ones_like(decay)
 
+        #print('Scale = ', scale.size())
+
         incremental_state["prev_key_value"] = kv
         incremental_state["scale"] = scale
 
-        output = torch.sum(qr * kv, dim=3)
+        output = torch.sum(qr * kv, dim=4)
+        #print('Output = ', output.size())
         return output
 
     def forward(self, x, rel_pos, incremental_state=None):
+        #print('Input = ', x.size())
         bsz, seq_len, _ = x.size()
         (sin, cos), inner_mask = rel_pos
 
@@ -90,12 +102,26 @@ class MultiScaleRetention(nn.Module):
         v = self.v_proj(x)
         g = self.g_proj(x)
 
+        #print('Matrices')
+        #print(q.size())
+        #print(k.size())
+        #print(v.size())
+        #print(g.size())
+
         k *= self.scaling
-        q = q.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
-        k = k.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
+        q = q.view(bsz, seq_len, self.heads, 1, self.key_dim).transpose(1, 2)
+        k = k.view(bsz, seq_len, self.heads, 1, self.key_dim).transpose(1, 2)
+
+        #print('Head view')
+        #print(q.size())
+        #print(k.size())
 
         qr = theta_shift(q, sin, cos)
         kr = theta_shift(k, sin, cos)
+
+        #print('Rotation')
+        #print(qr.size())
+        #print(kr.size())
 
         if incremental_state is not None:
             output = self.recurrent_forward(qr, kr, v, inner_mask, incremental_state)

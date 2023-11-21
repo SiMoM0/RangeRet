@@ -76,7 +76,7 @@ class RetNet(nn.Module):
         if activate_recurrent:
             sin = torch.sin(angle * (self.slen - 1))
             cos = torch.cos(angle * (self.slen - 1))
-            retention_rel_pos = ((sin, cos), decay.exp())
+            retention_rel_pos = ((sin, cos), decay.exp().unsqueeze(0).repeat(self.slen, 1))
         else:
             index = torch.arange(self.slen).to(decay)
             sin = torch.sin(index[:, None] * angle[None, :])

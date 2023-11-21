@@ -68,7 +68,7 @@ parser = Parser(root=dataset_folder,
 knn = KNN(model_params['post']['KNN']['params'], parser.get_n_classes())
 
 # load model
-model = RangeRet(model_params).to(device)
+model = RangeRet(model_params, activate_recurrent=True).to(device)
 try:
     #load model
     model.load_state_dict(torch.load(model_path))
@@ -125,8 +125,8 @@ def infer(data_loader, to_original):
 
             #print(in_vol) # (B, H, W, C)
 
-            outputs = model(in_vol) # input format (B, H, W, C)
-            #outputs = model.recurrent(in_vol) # input format (B, H, W, C)
+            #outputs = model(in_vol) # input format (B, H, W, C)
+            outputs = model.recurrent(in_vol) # input format (B, H, W, C)
 
             #print('outputs shape: ', outputs.shape)
             #print('labels shape: ', labels_images[i].shape)

@@ -199,11 +199,13 @@ class RangeRet(nn.Module):
         incremental_state = {}
         outputs = []
 
-        for i in range(x.shape[1]):
-            o = self.retnet(x[:, i].unsqueeze(0), incremental_state)
-            outputs.append(o)
+        #for i in range(x.shape[1]):
+        #    o = self.retnet(x[:, i].unsqueeze(0), incremental_state)
+        #    outputs.append(o)
 
-        x = torch.cat(outputs, dim=1)
+        #x = torch.cat(outputs, dim=1)
+
+        x = self.retnet(x, incremental_state)
 
         x = torch.reshape(x, (x.shape[0], self.patched_image[0], self.patched_image[1], x.shape[2]))
 
