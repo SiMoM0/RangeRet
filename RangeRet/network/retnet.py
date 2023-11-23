@@ -86,6 +86,9 @@ class RetNet(nn.Module):
             row_diff = torch.abs(rows[:, None] - rows)
             col_diff = torch.abs(cols[:, None] - cols)
             mask = row_diff + col_diff
+            # exponential mapping
+            mask = ((mask - 1) / (self.img_dim[0] + self.img_dim[1] - 3))** 2 * (self.slen - 1) + 1
+            mask.fill_diagonal_(0)
             mask = torch.exp(mask * decay[:, None, None])
             mask = mask / mask.sum(dim=-1, keepdim=True).sqrt()
             retention_rel_pos = ((sin, cos), mask)
