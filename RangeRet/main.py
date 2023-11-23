@@ -143,7 +143,7 @@ def train_one_epoch(train_loader, epoch_index):
         #print(in_vol) # (B, H, W, C)
 
         outputs, ctx = model(in_vol, context) # input format (B, H, W, C)
-        context = ctx.detach()
+        context = (context + ctx.detach()) / 2
 
         #print('outputs shape: ', outputs.shape)
         #print('labels shape: ', labels_images[i].shape)
@@ -248,7 +248,8 @@ def validate(val_loader):
 
             #print(in_vol) # (B, H, W, C)
 
-            outputs, context = model(in_vol, context) # input format (B, H, W, C)
+            outputs, ctx = model(in_vol, context) # input format (B, H, W, C)
+            context = (context + ctx.detach()) / 2
 
             #print('outputs shape: ', outputs.shape)
             #print('labels shape: ', labels_images[i].shape)

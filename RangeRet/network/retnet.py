@@ -94,15 +94,16 @@ class RetNet(nn.Module):
 
         return retention_rel_pos
 
-    def forward(self, x, context, incremental_state=None):
+    def forward(self, x, context=None, incremental_state=None):
         """
         X: (batch_size, number of patches, number of features)
         """
 
         is_first_step = self.is_first_step(incremental_state)
 
-        context = context.view(1, self.slen, self.hidden_dim)
-        x = x + context
+        if context is not None:
+            context = context.view(1, self.slen, self.hidden_dim)
+            x = x + 0.5 * context
 
         for i in range(self.layers):
             if incremental_state is None or is_first_step:
@@ -113,16 +114,19 @@ class RetNet(nn.Module):
                 if i not in incremental_state:
                     incremental_state[i] = {}
 
-            y = self.retentions[i](self.layer_norms_1[i](x), self.retnet_rel_pos, incremental_state) + x
+            y = self.retentions[i](self.layer_norms_1[i](x), self.retnet_rel_pos, incremental_state[i] if incremental_state is not None else None) + x
             #y = self.retentions[i](self.layer_norms_1[i](x), self.D) + x
 
             x = self.ffns[i](self.layer_norms_2[i](y)) + y
+
+        # get context
+        context = x
 
         # reshape to patched image shape
         if incremental_state is None:
             x = torch.reshape(x, (x.shape[0], self.img_dim[0], self.img_dim[1], x.shape[2]))
 
-        return x
+        return x, context
 
     def forward_recurrent(self, x_n, s_n_1s, n):
         """

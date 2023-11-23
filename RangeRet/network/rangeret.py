@@ -158,13 +158,13 @@ class RangeRet(nn.Module):
 
         patches = self.viembed(rem_out)
 
-        ret_out = self.retnet(patches, context)
+        ret_out, ctx = self.retnet(patches, context)
 
         #ret_out = self.transformers(patches)
 
         out = self.head(ret_out)
 
-        return out, ret_out
+        return out, ctx
 
     def forward_recurrent(self, x):
         x = self.rem(x)
@@ -202,7 +202,7 @@ class RangeRet(nn.Module):
 
         #x = torch.cat(outputs, dim=1)
 
-        x = self.retnet(x, incremental_state)
+        x, _ = self.retnet(x, context=None, incremental_state=incremental_state)
 
         x = torch.reshape(x, (x.shape[0], self.patched_image[0], self.patched_image[1], x.shape[2]))
 
