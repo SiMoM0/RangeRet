@@ -29,7 +29,8 @@ class SemanticKitti(Dataset):
                learning_map_inv,    # inverse of previous (recover labels)
                sensor,              # sensor to parse scans from
                max_points=150000,   # max number of points present in dataset
-               gt=True):            # send ground truth?
+               gt=True,             # send ground truth?
+               aug=False):          # augmentation on point cloud
     # save deats
     self.root = os.path.join(root, "sequences")
     self.sequences = sequences
@@ -48,6 +49,7 @@ class SemanticKitti(Dataset):
     self.sensor_fov_down = sensor["fov_down"]
     self.max_points = max_points
     self.gt = gt
+    self.aug = aug
 
     # get number of classes (can't be len(self.learning_map) because there
     # are multiple repeated entries, so the number that matters is how many
@@ -132,7 +134,7 @@ class SemanticKitti(Dataset):
                        fov_down=self.sensor_fov_down)
 
     # open and obtain scan
-    scan.open_scan(scan_file)
+    scan.open_scan(scan_file, self.aug)
     if self.gt:
       scan.open_label(label_file)
       # map unused classes to used classes (also for projection)
@@ -238,6 +240,7 @@ class Parser():
                batch_size,        # batch size for train and val
                workers,           # threads to load data
                gt=True,           # get gt?
+               aug=False,         # point cloud augmentation for train
                shuffle_train=True):  # shuffle training set?
     super(Parser, self).__init__()
 
@@ -269,7 +272,8 @@ class Parser():
                                        learning_map_inv=self.learning_map_inv,
                                        sensor=self.sensor,
                                        max_points=max_points,
-                                       gt=self.gt)
+                                       gt=self.gt,
+                                       aug=aug)
 
     self.trainloader = torch.utils.data.DataLoader(self.train_dataset,
                                                    batch_size=self.batch_size,

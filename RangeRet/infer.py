@@ -62,6 +62,7 @@ parser = Parser(root=dataset_folder,
                 batch_size=config["train_params"]["batch_size"],
                 workers=config["train_params"]["workers"],
                 gt=True,
+                aug=False,
                 shuffle_train=True)
 
 # post processing

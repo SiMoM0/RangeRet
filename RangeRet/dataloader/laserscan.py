@@ -59,7 +59,7 @@ class LaserScan:
   def __len__(self):
     return self.size()
 
-  def open_scan(self, filename):
+  def open_scan(self, filename, aug=False):
     """ Open raw scan and fill in attributes
     """
     # reset just in case there was an open structure
@@ -79,7 +79,8 @@ class LaserScan:
     scan = scan.reshape((-1, 4))
 
     # TODO point cloud augmentation
-    #scan = augmentation(scan)
+    if aug:
+      scan = augmentation(scan)
 
     # put in attribute
     points = scan[:, 0:3]    # get xyz

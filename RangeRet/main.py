@@ -85,6 +85,7 @@ parser = Parser(root=dataset_folder,
                 batch_size=config["train_params"]["batch_size"],
                 workers=config["train_params"]["workers"],
                 gt=True,
+                aug=True,
                 shuffle_train=True)
 
 model = RangeRet(model_params).to(device)
