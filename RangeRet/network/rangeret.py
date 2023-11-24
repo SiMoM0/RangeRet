@@ -96,7 +96,7 @@ class SemanticHead(nn.Module):
         self.norm = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x):
+    def forward(self, x, rem):
         # reshape to (B, C, H, W)
         x = x.permute(0, 3, 1, 2)
         # bilinear interpolation
@@ -104,7 +104,8 @@ class SemanticHead(nn.Module):
         x = torch.nn.functional.interpolate(x, size=(self.height, self.width), mode='bilinear')
 
         # residual connection with REM output
-        #x = x + rem
+        if rem is not None:
+            x = x + rem
 
         # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
@@ -162,7 +163,7 @@ class RangeRet(nn.Module):
 
         #ret_out = self.transformers(patches)
 
-        out = self.head(ret_out)
+        out = self.head(ret_out, rem_out)
 
         return out
 
