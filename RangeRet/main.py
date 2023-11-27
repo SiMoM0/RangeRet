@@ -91,6 +91,9 @@ parser = Parser(root=dataset_folder,
 model = RangeRet(model_params).to(device)
 #model.load_state_dict(torch.load('rangeret-ocycle.pt'))
 
+# count number of parameters
+print('Total params: ', sum(p.numel() for p in model.parameters()))
+
 # weights for loss and bias
 epsilon_w = config["train_params"]["epsilon_w"]
 content = torch.zeros(parser.get_n_classes(), dtype=torch.float)
@@ -361,4 +364,4 @@ log_data = np.array(log_data, dtype=np.float32)
 np.savetxt(os.path.join(log_dir, datetime.today().strftime('%Y-%m-%d %H:%M:%S.txt')), log_data, fmt='%f')
 
 # save model
-torch.save(model.state_dict(), 'rangeret-model.pt')
+torch.save(model.state_dict(), f"{model_params['model_architecture']}-model.pt")
