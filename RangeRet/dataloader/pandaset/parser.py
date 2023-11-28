@@ -1,14 +1,12 @@
-# kitti parser from https://github.com/PRBonn/lidar-bonnetal/blob/master/train/tasks/semantic/dataset/kitti/parser.py
-
 import os
+import json
 import numpy as np
 import torch
-import random
 from torch.utils.data import Dataset
-from dataloader.kitti.laserscan import LaserScan, SemLaserScan
+from dataloader.pandaset.laserscan import LaserScan, SemLaserScan
 
-EXTENSIONS_SCAN = ['.bin']
-EXTENSIONS_LABEL = ['.label']
+EXTENSIONS_SCAN = ['.pkl.gz']
+EXTENSIONS_LABEL = ['.pkl.gz']
 
 
 def is_scan(filename):
@@ -30,9 +28,9 @@ class SemanticKitti(Dataset):
                sensor,              # sensor to parse scans from
                max_points=150000,   # max number of points present in dataset
                gt=True,             # send ground truth?
-               aug=False):          # augmentation on point cloud
+               aug=False):
     # save deats
-    self.root = os.path.join(root, "sequences")
+    self.root = root
     self.sequences = sequences
     self.labels = labels
     self.color_map = color_map
@@ -83,19 +81,27 @@ class SemanticKitti(Dataset):
     # fill in with names, checking that all sequences are complete
     for seq in self.sequences:
       # to string
-      seq = '{0:02d}'.format(int(seq))
+      seq = '{0:03d}'.format(int(seq))
+
+      # check if semseg exists for this sequence
+      if not os.path.exists(os.path.join(self.root, seq, 'annotations', 'semseg')):
+        continue
 
       print("parsing seq {}".format(seq))
 
       # get paths for each
-      scan_path = os.path.join(self.root, seq, "velodyne")
-      label_path = os.path.join(self.root, seq, "labels")
+      scan_path = os.path.join(self.root, seq, "lidar")
+      label_path = os.path.join(self.root, seq, 'annotations', 'semseg')
+      print(label_path)
 
       # get files
       scan_files = [os.path.join(dp, f) for dp, dn, fn in os.walk(
           os.path.expanduser(scan_path)) for f in fn if is_scan(f)]
       label_files = [os.path.join(dp, f) for dp, dn, fn in os.walk(
           os.path.expanduser(label_path)) for f in fn if is_label(f)]
+
+      #print(len(scan_files))
+      #print(len(label_files))
 
       # check all scans have labels
       if self.gt:
@@ -112,9 +118,15 @@ class SemanticKitti(Dataset):
     print("Using {} scans from sequences {}".format(len(self.scan_files),
                                                     self.sequences))
 
+    poses_path = os.path.join(self.root, seq, 'lidar', 'poses.json')
+    poses_file = open(poses_path)
+    self.poses = json.load(poses_file)
+    poses_file.close()
+
   def __getitem__(self, index):
     # get item in tensor shape
-    scan_file = self.scan_files[index]
+    scan_file = self.scan_files[index%(len(self.scan_files))]
+    pose = self.poses[index%(len(self.poses))]
     if self.gt:
       label_file = self.label_files[index]
 
@@ -134,9 +146,9 @@ class SemanticKitti(Dataset):
                        fov_down=self.sensor_fov_down)
 
     # open and obtain scan
-    scan.open_scan(scan_file, self.aug)
+    pc_size = scan.open_scan_panda(scan_file, pose, self.aug)
     if self.gt:
-      scan.open_label(label_file)
+      scan.open_label(label_file, pc_size)
       # map unused classes to used classes (also for projection)
       scan.sem_label = self.map(scan.sem_label, self.learning_map)
       scan.proj_sem_label = self.map(scan.proj_sem_label, self.learning_map)
@@ -184,12 +196,6 @@ class SemanticKitti(Dataset):
     # print("path_norm: ", path_norm)
     # print("path_seq", path_seq)
     # print("path_name", path_name)
-
-    # TODO shift augmentation
-    #proj_, proj_labels_ = proj.copy(), proj_labels.copy()
-    #p = random.randint(int(0.25*self.sensor_img_W), int(0.75*self.sensor_img_W))
-    #proj_ = np.concatenate(proj_[:, p:, :], proj_[:, :p, :], axis=1)
-    #proj_labels_ = np.concatenate(proj_labels_[p:, :], proj_labels_[:p, :], axis=1)
 
     # return
     return proj, proj_mask, proj_labels, unproj_labels, path_seq, path_name, proj_x, proj_y, proj_range, unproj_range, proj_xyz, unproj_xyz, proj_remission, unproj_remissions, unproj_n_points
@@ -240,7 +246,7 @@ class Parser():
                batch_size,        # batch size for train and val
                workers,           # threads to load data
                gt=True,           # get gt?
-               aug=False,         # point cloud augmentation for train
+               aug=False,         # point cloud augmentation for training
                shuffle_train=True):  # shuffle training set?
     super(Parser, self).__init__()
 

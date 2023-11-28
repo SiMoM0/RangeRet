@@ -17,7 +17,7 @@ from datetime import datetime
 import torch.nn.functional as F
 
 from utils.knn import KNN
-from dataloader.kitti.parser import Parser
+from dataloader.pandaset.parser import Parser
 from utils.lovasz_loss import Lovasz_loss
 from utils.focal_loss import FocalLoss
 from utils.lion_optimizer import Lion
