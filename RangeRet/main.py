@@ -117,7 +117,7 @@ focal_criterion = FocalLoss(gamma=2.0, ignore_index=0).to(device) # TODO set gam
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
 #optimizer = Lion(model.parameters(), lr=1e-4, weight_decay=5e-2)
 # scheduler
-scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train_params']['num_epochs'], pct_start=0.02)
+scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train_params']['num_epochs'], pct_start=0.3)
 #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['train_params']['num_epochs'] - 4, eta_min=1e-5)
 
 # post processing
