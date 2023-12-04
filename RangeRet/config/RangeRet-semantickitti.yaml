@@ -28,8 +28,8 @@ model_params:
     KNN:
       use: True
       params:
-        knn: 5
-        search: 5
+        knn: 7
+        search: 7
         sigma: 1.0 
         cutoff: 1.0
 
