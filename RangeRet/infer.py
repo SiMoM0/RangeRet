@@ -113,11 +113,16 @@ def infer(data_loader, to_original):
             if not os.path.exists(seq_folder):
                 os.mkdir(seq_folder)
 
+            # create predictions folder
+            if not os.path.exists(os.path.join(seq_folder, 'predictions')):
+                os.mkdir(os.path.join(seq_folder, 'predictions'))
+
             p_x = p_x[0, :npoints]
             p_y = p_y[0, :npoints]
             proj_range = proj_range[0, :npoints]
             unproj_range = unproj_range[0, :npoints]
-            unproj_labels = unproj_labels[0, :npoints]
+            if split != 'test':
+                unproj_labels = unproj_labels[0, :npoints]
 
             in_vol = in_vol.cuda()
             #proj_labels = proj_labels.cuda()
@@ -172,7 +177,7 @@ def infer(data_loader, to_original):
             preds = to_original(pred_np)
 
             # prediction file path
-            path = os.path.join(seq_folder, path_name[0])
+            path = os.path.join(seq_folder, 'predictions', path_name[0])
             preds.tofile(path)
 
     # array of true-false
