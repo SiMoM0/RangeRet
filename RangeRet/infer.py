@@ -41,6 +41,8 @@ config = load_yaml(config_path)
 data_config = load_yaml(config['dataset_params']['data_config'])
 
 # create predictions folder
+if not os.path.exists(prediction_path):
+    os.mkdir(prediction_path)
 prediction_path = os.path.join(prediction_path, 'sequences')
 if not os.path.exists(prediction_path):
     os.mkdir(prediction_path)
