@@ -46,7 +46,7 @@ dataset_params:
     name: "HDL64"
     type: "spherical" # projective
     fov_up: 15
-    fov_down: -4 
+    fov_down: -25 
     img_prop:
       width: 1024
       height: 64
