@@ -15,7 +15,8 @@ from torch import nn
 from tqdm import tqdm
 
 from utils.knn import KNN
-from dataloader.kitti.parser import Parser
+#from dataloader.kitti.parser import Parser
+from dataloader.pandaset.parser import Parser
 
 from network.rangeret import RangeRet
 
@@ -41,6 +42,8 @@ config = load_yaml(config_path)
 data_config = load_yaml(config['dataset_params']['data_config'])
 
 # create predictions folder
+if not os.path.exists(prediction_path):
+    os.mkdir(prediction_path)
 prediction_path = os.path.join(prediction_path, 'sequences')
 if not os.path.exists(prediction_path):
     os.mkdir(prediction_path)
@@ -172,7 +175,7 @@ def infer(data_loader, to_original):
             preds = to_original(pred_np)
 
             # prediction file path
-            path = os.path.join(seq_folder, path_name[0])
+            path = os.path.join(seq_folder, path_name[0].replace('pkl.gz', 'label'))
             preds.tofile(path)
 
     # array of true-false

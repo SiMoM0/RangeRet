@@ -187,6 +187,8 @@ learning_ignore: # Ignore classes
 split: # sequence numbers
   train:
     - 1
+  valid:
+    - 1
     - 2
     - 3
     - 5
@@ -228,7 +230,6 @@ split: # sequence numbers
     - 66
     - 67
     - 69
-  valid:
     - 70
     - 71
     - 72
@@ -244,7 +245,6 @@ split: # sequence numbers
     - 95
     - 97
     - 98
-  test:
     - 101
     - 102
     - 103
@@ -264,4 +264,6 @@ split: # sequence numbers
     - 124
     - 139
     - 149
+    - 158
+  test:
     - 158
