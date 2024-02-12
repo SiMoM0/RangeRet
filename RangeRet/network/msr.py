@@ -14,7 +14,7 @@ def theta_shift(x, sin, cos):
     return (x * cos) + (rotate_every_two(x) * sin)
 
 class MultiScaleRetention(nn.Module):
-    def __init__(self, hidden_size, heads, double_v_dim, num_patches):
+    def __init__(self, hidden_size, heads, double_v_dim):
         """
         Multi-scale retention mechanism based on the paper
         "Retentive Network: A Successor to Transformer for Large Language Models"[https://arxiv.org/pdf/2307.08621.pdf]

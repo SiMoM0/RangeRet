@@ -35,14 +35,19 @@ class VisionEmbedding(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x, masked_position=None, **kwargs):
+        '''
+        Returns flattened patches and new dimensions H, W
+        '''
         B, C, H, W = x.shape
         assert (
             H == self.img_size[0] and W == self.img_size[1]
         ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x).flatten(2).transpose(1, 2)
+        x = self.proj(x)
+        B, C, H, W = x.shape
+        x = x.flatten(2).transpose(1, 2)
         x = self.norm(x)
 
-        return x
+        return x, H, W
 
 # vision patch embedding test
 if __name__ == '__main__':
@@ -50,5 +55,6 @@ if __name__ == '__main__':
     image = torch.rand(1, 5, 64, 1024)
     print(image.shape)
 
-    out = vembed(image)
+    out, H, W = vembed(image)
     print(out.shape)
+    print(f'New dimensions: {H, W}')

@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 from network.retnet import RetNet
+from network.pyretnet import PyramidRetNet
 from utils.vision_embedding import VisionEmbedding
 
 from network.transformers import Transformers
@@ -84,38 +85,54 @@ class SemanticHead(nn.Module):
     '''
     Semantic Head: two MLP layers to map feature dimension into number of classes
     '''
-    def __init__(self, in_dim, hidden_dim, height, width, num_classes, dropout=0.0):
+    def __init__(self, in_dim=[128, 128, 256], hidden_dim=128, height=64, width=1024, num_classes=20, dropout=0.0):
         super(SemanticHead, self).__init__()
         self.height = height
         self.width = width
 
-        self.mlp1 = nn.Linear(in_dim, hidden_dim)
-        self.gelu = nn.GELU()
-        self.mlp2 = nn.Linear(hidden_dim, num_classes)
+        self.mlp1 = MLP(in_dim=in_dim[0], out_dim=hidden_dim)
+        self.mlp2 = MLP(in_dim=in_dim[1], out_dim=hidden_dim)
+        self.mlp3 = MLP(in_dim=in_dim[2], out_dim=hidden_dim)
+
+        self.fuse = nn.Sequential(
+            nn.Conv2d(in_channels=hidden_dim*3, out_channels=hidden_dim, kernel_size=1, bias=False),
+            nn.BatchNorm2d(num_features=hidden_dim),
+            nn.GELU()
+        )
+
+        self.final = nn.Linear(hidden_dim, num_classes)
 
         self.norm = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x, rem):
+        x1, x2, x3 = x
+
+        x1 = self.mlp1(x1)
         # reshape to (B, C, H, W)
-        x = x.permute(0, 3, 1, 2)
+        x1 = x1.permute(0, 3, 1, 2)
         # bilinear interpolation
-        # TODO refactor if batch size is greater than 1
-        x = torch.nn.functional.interpolate(x, size=(self.height, self.width), mode='bilinear')
+        x1 = torch.nn.functional.interpolate(x1, size=(self.height, self.width), mode='bilinear')
+
+        x2 = self.mlp2(x2)
+        x2 = x2.permute(0, 3, 1, 2)
+        x2 = torch.nn.functional.interpolate(x2, size=(self.height, self.width), mode='bilinear')
+
+        x3 = self.mlp3(x3)
+        x3 = x3.permute(0, 3, 1, 2)
+        x3 = torch.nn.functional.interpolate(x3, size=(self.height, self.width), mode='bilinear')
+
+        x = torch.cat([x1, x2, x3], dim=1)
+
+        x = self.fuse(x)
 
         # residual connection with REM output
         if rem is not None:
             x = x + rem
 
-        # reshape to (B, H, W, C)
         x = x.permute(0, 2, 3, 1)
 
-        #x = self.dropout(x)
-        x = self.mlp1(x)
-        x = self.norm(x)
-        #x = self.dropout(x)
-        x = self.gelu(x)
-        x = self.mlp2(x)
+        x = self.final(x)
 
         return x
 
@@ -144,11 +161,13 @@ class RangeRet(nn.Module):
 
         self.rem = REM(self.in_dim, self.rem_dim, dropout=0.0)
         
-        self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
+        self.model = PyramidRetNet(img_size=(64, 1024), patch_size=(7, 5, 3), strides=(4, 3, 2), in_dim=128, double_v_dim=True)
+        
+        #self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
         # TODO add 4 stages of RetNet with different downsampling
-        self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim, activate_recurrent) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
+        #self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim, activate_recurrent) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
         # TODO set 4 decoders as the number of stages for downsampling
-        self.head = SemanticHead(self.rem_dim, self.decoder_dim, self.H, self.W, 20)
+        self.head = SemanticHead([128, 128, 256], 128, self.H, self.W, 20)
 
         # transformers for ablation study
         #self.transformers = Transformers(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image)
@@ -157,9 +176,11 @@ class RangeRet(nn.Module):
         # TODO for better performance dont use different vars
         rem_out = self.rem(x)
 
-        patches = self.viembed(rem_out)
+        #patches = self.viembed(rem_out)
 
-        ret_out = self.retnet(patches)
+        #ret_out = self.retnet(patches)
+
+        ret_out = self.model(rem_out)
 
         #ret_out = self.transformers(patches)
 
