@@ -134,10 +134,11 @@ class SemanticHead(nn.Module):
 
         x = self.final(x)
 
+        # TODO use predictions from all stages ?
         return x
 
 class RangeRet(nn.Module):
-    def __init__(self, model_params: dict, activate_recurrent=False):
+    def __init__(self, model_params: dict, img_size=(64, 1024), activate_recurrent=False):
         super(RangeRet, self).__init__()
         self.H = model_params['H']
         self.W = model_params['W']

@@ -35,7 +35,7 @@ model_params:
 
 ###################
 ## Dataset options
-dataset_params:
+dataset:
   pc_dataset_type: "SemanticKITTI"
   collate_type: "collate_fn_default"
   ignore_label: 0
@@ -65,8 +65,8 @@ dataset_params:
 
 ###################
 ## Train params
-train_params:
-  num_epochs: 64 # default 128
+train:
+  epochs: 64 # default 128
   learning_rate: 1.0e-4 # 1.0e-2 for SGD | 1.0e-4 for AdamW
   optimizer: AdamW  # [SGD, AdamW]
   batch_size: 1   # batch size (default rangenet 16)
@@ -78,6 +78,9 @@ train_params:
       max_lr: 0.01 # Equal to optimizer.lr
       total_steps: 1000 # Equal to max_epochs * iterations_per_epoch
       pct_start: 0.02 # The percentage of the cycle (in number of steps) spent increasing the learning rate (warmup).
+  
+  report_epoch: 1
+
   #lr_scheduler: CosineAnnealingWarmRestarts  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
   #momentum: 0.9
   #nesterov: True
