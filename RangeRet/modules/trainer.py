@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import datetime
+import numpy as np
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -41,7 +43,7 @@ class Trainer():
             gt=True,
             aug=True,
             shuffle_train=True)
-        
+
         # weights for loss and bias
         epsilon_w = self.ARCH["train"]["epsilon_w"]
         content = torch.zeros(self.parser.get_n_classes(), dtype=torch.float)
@@ -84,7 +86,7 @@ class Trainer():
         #    self.model_single = self.model.module  # single model to get weight names
         #    self.multi_gpu = True
         #    self.n_gpus = torch.cuda.device_count()
-            
+
         # Losses
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, weight=self.loss_w).to(self.device)
         self.lovasz = Lovasz_loss(ignore=0).to(self.device)
@@ -110,6 +112,9 @@ class Trainer():
                 print("Ignoring class ", i, " in IoU evaluation")
         self.evaluator = iouEval(self.parser.get_n_classes(), self.device, self.ignore_class)
 
+        #log_data = [['train_loss', 'val_loss', 'train_iou', 'val_iou']]
+        log_data = []
+
         # trian for n epochs
         for epoch in range(self.ARCH['train']['epochs']):
             print(f'EPOCH {epoch+1}:')
@@ -121,7 +126,7 @@ class Trainer():
                                               epoch=epoch,
                                               evaluator=self.evaluator,
                                               scheduler=self.scheduler)
-            
+
             print('Train | acc: {:.2%} | mIoU: {:.2%} | loss: {:.5}'.format(acc, iou, loss))
 
             # update best iou and save checkpoint
@@ -133,20 +138,29 @@ class Trainer():
 
             if epoch % self.ARCH['train']['report_epoch'] == 0:
                 # evaluate on validation set
-                acc, iou, loss = self.validate(val_loader=self.parser.get_valid_set(),
+                val_acc, val_iou, val_loss = self.validate(val_loader=self.parser.get_valid_set(),
                                                model=self.model,
                                                criterion=self.criterion,
                                                evaluator=self.evaluator)
-                
-                if iou > best_val_iou:
+
+                print('Validation | acc: {:.2%} | mIoU: {:.2%} | loss: {:.5}'.format(val_acc, val_iou, val_loss))
+
+                if val_iou > best_val_iou:
                     print('Best mIoU in validation so far, model saved!')
-                    best_val_iou = iou
+                    best_val_iou = val_iou
                     # TODO save the weights
                     #torch.save(self.model.state_dict(), f"{ARCH['model_architecture']}-model.pt")
             
-            torch.save(self.model.state_dict(), f"{self.ARCH['model_architecture']}-model.pt")
-            
-            print('Finished Training')
+            # update log
+            log_data.append((acc, iou, loss, val_acc, val_iou, val_loss))
+
+        # log data
+        log_data = np.array(log_data, dtype=np.float32)
+        np.savetxt(os.path.join(self.logdir, datetime.today().strftime('%Y-%m-%d %H:%M:%S.txt')), log_data, fmt='%f')
+
+        torch.save(self.model.state_dict(), f"{self.ARCH['model_architecture']}-model.pt")
+
+        print('Finished Training')
 
         return
 
@@ -154,7 +168,7 @@ class Trainer():
         losses = AverageMeter()
         acc = AverageMeter()
         iou = AverageMeter()
-        
+
         if self.gpu:
             torch.cuda.empty_cache()
 
@@ -173,11 +187,13 @@ class Trainer():
 
             # compute loss
             # TODO use predictions from each stage ?
-            loss = criterion(predictions, proj_labels.long())
+            ce_loss = criterion(predictions, proj_labels.long())
             lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels.long())
             focal_loss = self.focal(predictions, proj_labels.long())
 
-            loss = loss + focal_loss + lovasz_loss
+            loss = ce_loss + focal_loss + lovasz_loss
+
+            print(f'Loss = {loss}')
 
             loss.backward()
 
@@ -201,7 +217,7 @@ class Trainer():
         losses = AverageMeter()
         acc = AverageMeter()
         iou = AverageMeter()
-        
+
         if self.gpu:
             torch.cuda.empty_cache()
 
@@ -221,11 +237,11 @@ class Trainer():
 
                 # compute loss
                 # TODO use predictions from each stage ?
-                loss = criterion(predictions, proj_labels.long())
+                ce_loss = criterion(predictions, proj_labels.long())
                 lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels.long())
                 focal_loss = self.focal(predictions, proj_labels.long())
 
-                loss = loss + focal_loss + lovasz_loss
+                loss = ce_loss + focal_loss + lovasz_loss
 
                 argmax = predictions.argmax(dim=1)
                 evaluator.addBatch(argmax, proj_labels)

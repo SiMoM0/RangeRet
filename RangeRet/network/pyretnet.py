@@ -101,9 +101,9 @@ class PyramidRetNet(nn.Module):
         #self.norm4 = nn.LayerNorm(embed_dims[3])
 
     def get_rel_pos(self, head_dim, num_head, slen, img_dim, activate_recurrent=False, manhattan=True):
-        angle = 1.0 / (10000 ** torch.linspace(0, 1, head_dim // num_head // 2)).cuda()
+        angle = 1.0 / (10000 ** torch.linspace(0, 1, head_dim // num_head // 2)).to('cuda' if torch.cuda.is_available() else 'cpu')
         angle = angle.unsqueeze(-1).repeat(1, 2).flatten()
-        decay = torch.log(1 - 2 ** (-5 - torch.arange(num_head, dtype=torch.float))).cuda()
+        decay = torch.log(1 - 2 ** (-5 - torch.arange(num_head, dtype=torch.float))).to('cuda' if torch.cuda.is_available() else 'cpu')
         # alternative decay described in the paper
         #gammas = (1 - torch.exp(torch.linspace(math.log(1/32), math.log(1/512), self.heads))).cuda()
 
