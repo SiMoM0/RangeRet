@@ -123,7 +123,7 @@ class KNN(nn.Module):
 
     # get the top k predictions from the knn at each pixel
     knn_argmax = torch.gather(
-        input=unproj_unfold_1_argmax.cuda(), dim=1, index=knn_idx.cuda())
+        input=unproj_unfold_1_argmax, dim=1, index=knn_idx)
 
     # fake an invalid argmax of classes + 1 for all cutoff items
     if self.cutoff > 0:

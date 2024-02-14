@@ -97,6 +97,7 @@ if __name__ == '__main__':
 			shutil.rmtree(FLAGS.log)
 		os.makedirs(FLAGS.log)
 		os.makedirs(os.path.join(FLAGS.log, "sequences"))
+		# TODO create folder based on split
 		for seq in DATA["split"]["train"]:
 			seq = '{0:02d}'.format(int(seq))
 			print("train", seq)
@@ -118,10 +119,10 @@ if __name__ == '__main__':
 		raise
 
 	# does model folder exist?
-	if os.path.isdir(FLAGS.model):
-		print("model folder exists! Using model from %s" % (FLAGS.model))
+	if os.path.isfile(FLAGS.model):
+		print("model exists! Using model from %s" % (FLAGS.model))
 	else:
-		print("model folder doesnt exist! Can't infer...")
+		print("model does not exist! Can't infer...")
 		quit()
 
 	# create user and infer dataset

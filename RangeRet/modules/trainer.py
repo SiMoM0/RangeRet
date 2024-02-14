@@ -131,7 +131,7 @@ class Trainer():
 
             # update best iou and save checkpoint
             if iou > best_train_iou:
-                print('BEst mIoU in training set so far, save model!')
+                print('Best mIoU in training set so far, save model!')
                 best_train_iou = iou
                 # TODO save checkpoint
                 #torch.save(self.model.state_dict(), f"{ARCH['model_architecture']}-model.pt")
@@ -141,6 +141,7 @@ class Trainer():
                 val_acc, val_iou, val_loss = self.validate(val_loader=self.parser.get_valid_set(),
                                                model=self.model,
                                                criterion=self.criterion,
+                                               epoch=epoch,
                                                evaluator=self.evaluator)
 
                 print('Validation | acc: {:.2%} | mIoU: {:.2%} | loss: {:.5}'.format(val_acc, val_iou, val_loss))
@@ -156,9 +157,9 @@ class Trainer():
 
         # log data
         log_data = np.array(log_data, dtype=np.float32)
-        np.savetxt(os.path.join(self.logdir, datetime.today().strftime('%Y-%m-%d %H:%M:%S.txt')), log_data, fmt='%f')
+        np.savetxt(os.path.join(self.logdir, 'training_log.txt'), log_data, fmt='%f')
 
-        torch.save(self.model.state_dict(), f"{self.ARCH['model_architecture']}-model.pt")
+        torch.save(self.model.state_dict(), os.path.join(self.logdir, f'{self.ARCH['model_params']['model_architecture']}-model.pt'))
 
         print('Finished Training')
 
@@ -192,8 +193,6 @@ class Trainer():
             focal_loss = self.focal(predictions, proj_labels.long())
 
             loss = ce_loss + focal_loss + lovasz_loss
-
-            print(f'Loss = {loss}')
 
             loss.backward()
 

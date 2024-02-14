@@ -66,7 +66,7 @@ if not os.path.exists(checkpoints_dir):
 
 # config path (label mapping)
 config = load_yaml(config_path)
-data_config = load_yaml(config['dataset_params']['data_config'])
+data_config = load_yaml(config['dataset']['data_config'])
 
 # model params
 model_params = config['model_params']
@@ -80,10 +80,10 @@ parser = Parser(root=dataset_folder,
                 color_map=data_config["color_map"],
                 learning_map=data_config["learning_map"],
                 learning_map_inv=data_config["learning_map_inv"],
-                sensor=config["dataset_params"]["sensor"],
-                max_points=config["dataset_params"]["max_points"],
-                batch_size=config["train_params"]["batch_size"],
-                workers=config["train_params"]["workers"],
+                sensor=config["dataset"]["sensor"],
+                max_points=config["dataset"]["max_points"],
+                batch_size=config["train"]["batch_size"],
+                workers=config["train"]["workers"],
                 gt=True,
                 aug=True,
                 shuffle_train=True)
@@ -95,7 +95,7 @@ model = RangeRet(model_params).to(device)
 print('Total params: ', sum(p.numel() for p in model.parameters()))
 
 # weights for loss and bias
-epsilon_w = config["train_params"]["epsilon_w"]
+epsilon_w = config["train"]["epsilon_w"]
 content = torch.zeros(parser.get_n_classes(), dtype=torch.float)
 for cl, freq in data_config["content"].items():
   x_cl = parser.to_xentropy(cl)  # map actual class to xentropy class
@@ -117,7 +117,7 @@ focal_criterion = FocalLoss(gamma=2.0, ignore_index=0).to(device) # TODO set gam
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
 #optimizer = Lion(model.parameters(), lr=1e-4, weight_decay=5e-2)
 # scheduler
-scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train_params']['num_epochs'], pct_start=0.3)
+scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(parser.get_train_set()), epochs=config['train']['epochs'], pct_start=0.3)
 #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config['train_params']['num_epochs'] - 4, eta_min=1e-5)
 
 # post processing
@@ -316,7 +316,7 @@ def validate(val_loader):
     return val_loss / len(val_loader), iou_mean
 
 start_epoch = 0
-EPOCHS = config['train_params']['num_epochs']
+EPOCHS = config['train']['epochs']
 
 #load checkpoint
 if load_checkpoint:

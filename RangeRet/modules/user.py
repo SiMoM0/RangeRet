@@ -50,14 +50,15 @@ class User():
         try:
             #load model
             self.model.load_state_dict(torch.load(self.modeldir), strict=True)
+            #self.model.load_state_dict(torch.load(self.modeldir, map_location=torch.device('cpu')), strict=True)
         except:
             # load model from checkpoint
             self.model.load_state_dict(torch.load(self.modeldir)['model_state_dict'], strict=True)
 
         # knn post processing
         self.post = None
-        if self.ARCH['post']['KNN']['use']:
-            self.post = KNN(self.ARCH['post']['KNN']['params'], self.parser.get_n_classes())
+        if self.ARCH['model_params']['post']['KNN']['use']:
+            self.post = KNN(self.ARCH['model_params']['post']['KNN']['params'], self.parser.get_n_classes())
 
         # GPU
         self.gpu = False
@@ -78,15 +79,18 @@ class User():
         if self.split == 'train':
             # do train set
             acc, iou = self.infer_subset(loader=self.parser.get_train_set(),
-                                         to_orig_fn=self.parser.to_original)
+                                         to_orig_fn=self.parser.to_original,
+                                         evaluator=self.evaluator)
             print('Split: {} | acc: {:.2%} | iou: {:.2%}'.format(self.split, acc, iou))
         elif self.split == 'valid':
             acc, iou = self.infer_subset(loader=self.parser.get_valid_set(),
-                                         to_orig_fn=self.parser.to_original)
+                                         to_orig_fn=self.parser.to_original,
+                                         evaluator=self.evaluator)
             print('Split: {} | acc: {:.2%} | iou: {:.2%}'.format(self.split, acc, iou))
         elif self.split == 'test':
             self.infer_subset(loader=self.parser.get_train_set(),
-                                         to_orig_fn=self.parser.to_original)
+                                         to_orig_fn=self.parser.to_original,
+                                         evaluator=self.evaluator)
         else:
             raise SyntaxError('Invalid split chosen. Choose one of \'train\', \'valid\', \'test\'')
 
@@ -115,7 +119,7 @@ class User():
                 proj_range = proj_range[0, :npoints]
                 unproj_range = unproj_range[0, :npoints]
                 path_seq = path_seq[0]
-                path_seq = path_seq[0]
+                path_name = path_name[0]
 
                 if self.eval and self.split != 'test':
                     unproj_labels = unproj_labels[0, :npoints]
@@ -136,6 +140,7 @@ class User():
                     # knn post processing
                     unproj_argmax = self.post(proj_range,
                                               unproj_range,
+                                              proj_argmax,
                                               p_x,
                                               p_y)
                 else:

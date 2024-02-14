@@ -96,8 +96,9 @@ if __name__ == '__main__':
     
     # create log folder
     try:
-        if not os.path.exists(FLAGS.log):
-            os.mkdir(FLAGS.log)
+        if os.path.isdir(FLAGS.log):
+            shutil.rmtree(FLAGS.log)
+        os.makedirs(FLAGS.log)
     except Exception as e:
         print(e)
         print("Error creating log directory. Check permissions!")
