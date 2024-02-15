@@ -216,6 +216,7 @@ class PyramidRetNet(nn.Module):
         #x = F.interpolate(x, size=(16, 256), mode='bilinear')
         outs.append(x.permute(0, 2, 3, 1))
 
+        # STAGE 4
         x, H, W = self.viembed4(x)
         for i, blk in enumerate(self.block4):
             x = blk(x, self.mask4, H, W)

@@ -143,37 +143,42 @@ class SemanticHead(nn.Module):
         return x
 
 class RangeRet(nn.Module):
-    def __init__(self, model_params: dict, img_size=(64, 1024), activate_recurrent=False):
+    def __init__(self, model_params: dict, img_size=(64, 1024), num_classes=20, activate_recurrent=False):
         super(RangeRet, self).__init__()
-        self.H = model_params['H']
-        self.W = model_params['W']
+        self.H, self.W = img_size
+        self.in_dim = model_params['input_dim']
         self.patch_size = model_params['patch_size']
-        self.stride = model_params['stride']
-        self.in_dim = model_params['input_dims']
+        self.strides = model_params['strides']
         self.rem_dim = model_params['rem_dim']
         self.decoder_dim = model_params['decoder_dim']
 
-        # retnet parameters
-        self.layers = model_params['retnet']['layers']
-        self.hidden_dim = model_params['retnet']['hidden_dim']
-        self.ffn_size = model_params['retnet']['ffn_size']
-        self.num_head = model_params['retnet']['num_head']
-        self.double_v_dim = model_params['retnet']['double_v_dim']
+        # retnet params
+        self.embed_dims = model_params['embed_dims']
+        self.heads = model_params['heads']
+        self.mlp_dim = model_params['mlp_dim']
+        self.blocks = model_params['blocks']
+        self.ratio = model_params['ratio']
 
-        self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
-                              math.floor((self.W - self.patch_size) / self.stride) + 1)
+        self.num_classes = num_classes
 
-        print(f'Patched image size = {self.patched_image}')
+        #self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
+        #                      math.floor((self.W - self.patch_size) / self.stride) + 1)
+        #print(f'Patched image size = {self.patched_image}')
 
         self.rem = REM(self.in_dim, self.rem_dim, dropout=0.0)
         
-        self.model = PyramidRetNet(img_size=(64, 1024), patch_size=(3, 3, 3, 3), strides=(1, 2, 2, 2), in_dim=128, double_v_dim=False)
+        self.model = PyramidRetNet(img_size=img_size,
+                                   patch_size=self.patch_size,
+                                   strides=self.strides,
+                                   in_dim=self.rem_dim,
+                                   double_v_dim=False,
+                                   embed_dims=self.embed_dims,
+                                   heads=self.heads,
+                                   mlp_dim=self.mlp_dim,
+                                   blocks=self.blocks,
+                                   ratio=self.ratio)
         
-        #self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
-        # TODO add 4 stages of RetNet with different downsampling
-        #self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim, activate_recurrent) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
-        # TODO set 4 decoders as the number of stages for downsampling
-        self.head = SemanticHead([128, 128, 256, 512], 128, self.H, self.W, 20)
+        self.head = SemanticHead(self.embed_dims, self.decoder_dim, self.H, self.W, self.num_classes)
 
         # transformers for ablation study
         #self.transformers = Transformers(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image)

@@ -45,7 +45,7 @@ class User():
         
         # load model
         with torch.no_grad():
-            self.model = RangeRet(self.ARCH['model_params'], self.parser.get_resolution())
+            self.model = RangeRet(self.ARCH['model_params'], self.parser.get_resolution(), self.parser.get_n_classes())
 
         try:
             #load model

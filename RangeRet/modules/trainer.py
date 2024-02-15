@@ -58,7 +58,7 @@ class Trainer():
         print("Loss weights from content: ", self.loss_w.data)
 
         with torch.no_grad():
-            self.model = RangeRet(self.ARCH['model_params'], self.parser.get_resolution())
+            self.model = RangeRet(self.ARCH['model_params'], self.parser.get_resolution(), self.parser.get_n_classes())
 
         num_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f'Number of parameters {num_params/1000000} M')

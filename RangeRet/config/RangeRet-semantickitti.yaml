@@ -9,11 +9,18 @@ model_params:
   H: 64                     # range image height
   W: 1024                   # range image width
 
-  input_dims: 5             # range image features
-  patch_size: 7             # size of patch
-  stride: 4                 # stride (1 for full overlapping, patch_size for no overlapping)
+  input_dim: 5              # range image input features
+  patch_size: [3, 3, 3, 3]  # size of patch at each stage
+  strides: [1, 2, 2, 2]      # stride (1 for full overlapping, patch_size for no overlapping) at each stage
 
   rem_dim: 128              # output feature from REM
+
+  embed_dims: [128, 128, 256, 512]  # patch features at each stage
+
+  heads: [1, 2, 4, 8]       # number of heads at each stage
+  mlp_dim: [256, 256, 512, 1024] # mlp dimension at each stage
+  blocks: [3, 4, 6, 3]      # number of blocks per stage
+  ratio: [16, 8, 2, 1]      # retention reduction ratio
 
   retnet:
     layers: 4               # number of blocks per stage
@@ -22,7 +29,7 @@ model_params:
     num_head: 4             # number of heads per layer
     double_v_dim: True      # double v dimension wrt hidden_size
   
-  decoder_dim: 64           # semantic head hidden dimension
+  decoder_dim: 128           # semantic head hidden dimension
 
   post:                     # post processing
     KNN:
