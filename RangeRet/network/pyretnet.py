@@ -157,12 +157,13 @@ class PyramidRetNet(nn.Module):
             # exponential mapping
             #mask = ((mask - 1) / (img_dim[0] + img_dim[1] - 3))** 2 * (slen - 1) + 1
             #mask.fill_diagonal_(0)
-            #mask = torch.exp(mask * decay[:, None, None])
             
             # expand matrices
             xsin = expand_matrix(sin, ratio=ratio)
             xcos = expand_matrix(cos, ratio=ratio)
             mask = expand_matrix(mask, ratio=ratio)
+            
+            mask = torch.exp(mask * decay[:, None, None])
 
             mask = mask / mask.sum(dim=-1, keepdim=True).sqrt()
             # expanded sin and cos for Q, standard sin e cos for K
