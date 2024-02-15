@@ -18,7 +18,7 @@ class VisionEmbedding(nn.Module):
     * F = number of final features
     '''
 
-    def __init__(self, H=64, W=1024, patch_size=4, in_chans=5, embed_dim=128, stride=1):
+    def __init__(self, H=64, W=1024, patch_size=4, in_chans=5, embed_dim=128, stride=1, padding=0):
         super().__init__()
         img_size = (H, W)
         patch_size = (patch_size, patch_size)
@@ -29,7 +29,7 @@ class VisionEmbedding(nn.Module):
         self.num_patches = num_patches
 
         self.proj = nn.Conv2d(
-            in_chans, embed_dim, kernel_size=patch_size, stride=stride#, padding=(patch_size[0] // 2, patch_size[1] // 2)
+            in_chans, embed_dim, kernel_size=patch_size, stride=stride, padding=padding
         )
 
         self.norm = nn.LayerNorm(embed_dim)

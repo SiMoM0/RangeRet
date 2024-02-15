@@ -14,7 +14,7 @@ def theta_shift(x, sin, cos):
     return (x * cos) + (rotate_every_two(x) * sin)
 
 class MultiScaleRetention(nn.Module):
-    def __init__(self, hidden_size, heads, double_v_dim):
+    def __init__(self, hidden_size, heads, ratio, double_v_dim):
         """
         Multi-scale retention mechanism based on the paper
         "Retentive Network: A Successor to Transformer for Large Language Models"[https://arxiv.org/pdf/2307.08621.pdf]
@@ -31,10 +31,14 @@ class MultiScaleRetention(nn.Module):
 
         self.swish = lambda x: x * torch.sigmoid(x)
         self.q_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
-        self.k_proj = nn.Linear(self.hidden_size,self. hidden_size, bias=False)
-        self.v_proj = nn.Linear(self.hidden_size, self.v_dim, bias=False)
+        self.kv_proj = nn.Linear(self.hidden_size,self. hidden_size*2, bias=False)
         self.g_proj = nn.Linear(self.hidden_size, self.v_dim, bias=False)
         self.out_proj = nn.Linear(self.v_dim, hidden_size, bias=False)
+
+        self.ratio = ratio
+        if ratio > 1:
+            self.sr = nn.Conv2d(hidden_size, hidden_size, kernel_size=ratio, stride=ratio)
+            self.norm = nn.LayerNorm(hidden_size)
 
         #self.group_norm = nn.GroupNorm(self.heads, self.v_dim)
         self.group_norm = RMSNorm(self.head_size, eps=1e-5, elementwise_affine=False)
@@ -43,21 +47,17 @@ class MultiScaleRetention(nn.Module):
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.q_proj.weight, gain=2 ** -2.5)
-        nn.init.xavier_uniform_(self.k_proj.weight, gain=2 ** -2.5)
-        nn.init.xavier_uniform_(self.v_proj.weight, gain=2 ** -2.5)
+        nn.init.xavier_uniform_(self.kv_proj.weight, gain=2 ** -2.5)
         nn.init.xavier_uniform_(self.g_proj.weight, gain=2 ** -2.5)
         nn.init.xavier_uniform_(self.out_proj.weight)
 
     def parallel_forward(self, qr, kr, v, mask):
-        bsz, seq_len, embed_dim = v.size()
-
-        vr = v.view(bsz, seq_len, self.heads, self.head_size).transpose(1, 2)
 
         qk_mat = qr @ kr.transpose(-1, -2) # bsz * m * seq_len * seq_len
         qk_mat = qk_mat * mask
         # invariant after normalization
         qk_mat = qk_mat / qk_mat.detach().sum(dim=-1, keepdim=True).abs().clamp(min=1)
-        output = torch.matmul(qk_mat, vr)
+        output = torch.matmul(qk_mat, v)
         output = output.transpose(1, 2)
         return output
 
@@ -81,20 +81,27 @@ class MultiScaleRetention(nn.Module):
         output = torch.sum(qr * kv, dim=3)
         return output
 
-    def forward(self, x, rel_pos, incremental_state=None):
-        bsz, seq_len, _ = x.size()
-        (sin, cos), inner_mask = rel_pos
+    def forward(self, x, rel_pos, H, W, incremental_state=None):
+        B, N, C = x.size()
+        (xsin, xcos), (sin, cos), inner_mask = rel_pos
 
         q = self.q_proj(x)
-        k = self.k_proj(x)
-        v = self.v_proj(x)
+        
+        if self.ratio > 1:
+            x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
+            x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
+            x_ = self.norm(x_)
+            kv = self.kv_proj(x_).reshape(B, -1, 2, self.heads, C // self.heads).permute(2, 0, 3, 1, 4)
+        else:
+            kv = self.kv_proj(x).reshape(B, -1, 2, self.heads, C // self.heads).permute(2, 0, 3, 1, 4)
+        k, v = kv[0], kv[1]
+
         g = self.g_proj(x)
 
         k *= self.scaling
-        q = q.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
-        k = k.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
+        q = q.view(B, N, self.heads, self.key_dim).transpose(1, 2)
 
-        qr = theta_shift(q, sin, cos)
+        qr = theta_shift(q, xsin, xcos)
         kr = theta_shift(k, sin, cos)
 
         if incremental_state is not None:
@@ -103,7 +110,7 @@ class MultiScaleRetention(nn.Module):
             output = self.parallel_forward(qr, kr, v, inner_mask)
 
         #output = self.group_norm(output.reshape(seq_len, self.head_size * self.heads)).reshape(bsz, seq_len, self.head_size * self.heads)
-        output = self.group_norm(output).reshape(bsz, seq_len, self.head_size * self.heads)
+        output = self.group_norm(output).reshape(B, N, self.head_size * self.heads)
 
         output = self.swish(g) * output
 
