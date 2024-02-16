@@ -13,6 +13,7 @@ from utils.avgmeter import AverageMeter
 from utils.ioueval import iouEval
 from utils.lovasz_loss import Lovasz_loss
 from utils.focal_loss import FocalLoss
+from utils.boundary_loss import BoundaryLoss
 
 from network.rangeret import RangeRet
 
@@ -91,6 +92,7 @@ class Trainer():
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, weight=self.loss_w).to(self.device)
         self.lovasz = Lovasz_loss(ignore=0).to(self.device)
         self.focal = FocalLoss(gamma=2.0, ignore_index=0).to(self.device)
+        self.bd = BoundaryLoss(theta0=3, theta=5)
 
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=0.01, steps_per_epoch=len(self.parser.get_train_set()), epochs=self.ARCH['train']['epochs'], pct_start=0.3)
