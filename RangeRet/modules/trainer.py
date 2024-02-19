@@ -93,7 +93,7 @@ class Trainer():
         self.focal = FocalLoss(gamma=2.0, ignore_index=0).to(self.device)
 
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
-        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=0.01, steps_per_epoch=len(self.parser.get_train_set()), epochs=self.ARCH['train']['epochs'], pct_start=0.3)
+        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=0.01, steps_per_epoch=len(self.parser.get_train_set()), epochs=self.ARCH['train']['epochs'], pct_start=0.02)
 
         print(f'Optimizer: {self.optimizer}')
         print(f'Scheduler: {self.scheduler}')
