@@ -150,7 +150,7 @@ class Trainer():
                     print('Best mIoU in validation so far, model saved!')
                     best_val_iou = val_iou
                     # TODO save the weights
-                    #torch.save(self.model.state_dict(), f"{ARCH['model_architecture']}-model.pt")
+                    torch.save(self.model.state_dict(), os.path.join(self.logdir, f"{self.ARCH['model_params']['model_architecture']}-train.pt"))
             
             # update log
             log_data.append((acc, iou, loss, val_acc, val_iou, val_loss))
@@ -159,7 +159,7 @@ class Trainer():
         log_data = np.array(log_data, dtype=np.float32)
         np.savetxt(os.path.join(self.logdir, 'training_log.txt'), log_data, fmt='%f')
 
-        torch.save(self.model.state_dict(), os.path.join(self.logdir, f'{self.ARCH['model_params']['model_architecture']}-model.pt'))
+        torch.save(self.model.state_dict(), os.path.join(self.logdir, f"{self.ARCH['model_params']['model_architecture']}-model.pt"))
 
         print('Finished Training')
 
