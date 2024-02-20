@@ -134,7 +134,7 @@ class User():
                         unproj_range = unproj_range.cuda()
 
                 proj_output = self.model(proj_in)
-                predictions = proj_output.permute(0, 3, 1, 2)
+                predictions = proj_output[0].permute(0, 3, 1, 2)
                 proj_argmax = predictions[0].argmax(dim=0)
 
                 if self.post:

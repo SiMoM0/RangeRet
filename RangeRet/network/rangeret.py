@@ -100,6 +100,10 @@ class SemanticHead(nn.Module):
             nn.GELU()
         )
 
+        self.pred1 = nn.Conv2d(in_channels=hidden_dim, out_channels=num_classes, kernel_size=1)
+        self.pred2 = nn.Conv2d(in_channels=hidden_dim, out_channels=num_classes, kernel_size=1)
+        self.pred3 = nn.Conv2d(in_channels=hidden_dim, out_channels=num_classes, kernel_size=1)
+
         self.final = nn.Linear(hidden_dim, num_classes)
 
         self.norm = nn.LayerNorm(hidden_dim)
@@ -126,6 +130,10 @@ class SemanticHead(nn.Module):
 
         x = self.fuse(x)
 
+        x1 = self.pred1(x1)
+        x2 = self.pred2(x2)
+        x3 = self.pred3(x3)
+
         # residual connection with REM output
         if rem is not None:
             x = x + rem
@@ -135,7 +143,7 @@ class SemanticHead(nn.Module):
         x = self.final(x)
 
         # TODO use predictions from all stages ?
-        return x
+        return [x, x1, x2, x3]
 
 class RangeRet(nn.Module):
     def __init__(self, model_params: dict, img_size=(64, 1024), activate_recurrent=False):

@@ -182,9 +182,9 @@ class Trainer():
                 in_vol = in_vol.cuda()
                 proj_labels = proj_labels.cuda(non_blocking=True)
 
-            output = model(in_vol)
+            outputs = model(in_vol)
 
-            predictions = output.permute(0, 3, 1, 2)
+            predictions = outputs[0].permute(0, 3, 1, 2)
 
             # compute loss
             # TODO use predictions from each stage ?
@@ -193,6 +193,13 @@ class Trainer():
             focal_loss = self.focal(predictions, proj_labels.long())
 
             loss = ce_loss + focal_loss + lovasz_loss
+
+            for j in range(1, len(outputs)):
+                cl = criterion(outputs[j], proj_labels.long())
+                ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels.long())
+                fl = self.focal(outputs[j], proj_labels.long())
+
+                loss += 0.5 * (cl + ll + fl)
 
             loss.backward()
 
@@ -230,9 +237,9 @@ class Trainer():
                     in_vol = in_vol.cuda()
                     proj_labels = proj_labels.cuda(non_blocking=True)
 
-                output = model(in_vol)
+                outputs = model(in_vol)
 
-                predictions = output.permute(0, 3, 1, 2)
+                predictions = outputs[0].permute(0, 3, 1, 2)
 
                 # compute loss
                 # TODO use predictions from each stage ?
@@ -241,6 +248,13 @@ class Trainer():
                 focal_loss = self.focal(predictions, proj_labels.long())
 
                 loss = ce_loss + focal_loss + lovasz_loss
+
+                for j in range(1, len(outputs)):
+                    cl = criterion(outputs[j], proj_labels.long())
+                    ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels.long())
+                    fl = self.focal(outputs[j], proj_labels.long())
+
+                loss += 0.5 * (cl + ll + fl)
 
                 argmax = predictions.argmax(dim=1)
                 evaluator.addBatch(argmax, proj_labels)
