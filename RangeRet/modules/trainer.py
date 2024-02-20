@@ -254,7 +254,7 @@ class Trainer():
                     ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels.long())
                     fl = self.focal(outputs[j], proj_labels.long())
 
-                loss += 0.5 * (cl + ll + fl)
+                    loss += 0.5 * (cl + ll + fl)
 
                 argmax = predictions.argmax(dim=1)
                 evaluator.addBatch(argmax, proj_labels)
