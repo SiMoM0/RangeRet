@@ -16,12 +16,17 @@ class BasicConv2d(nn.Module):
         self.drop = nn.Dropout2d(p=prob)
         self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation)
         self.norm = nn.InstanceNorm2d(out_planes)
+        self.bnorm = nn.BatchNorm2d(out_planes)
         self.gelu = nn.GELU()
 
     def forward(self, x):
+        B, C, H, W = x.shape
         x = self.drop(x)
         x = self.conv(x)
-        x = self.norm(x)
+        if B > 1:
+            x = self.bnorm(x)
+        else:
+            x = self.norm(x)
         x = self.gelu(x)
         return x
 
@@ -31,12 +36,19 @@ class MLP(nn.Module):
         self.drop = nn.Dropout(p=prob)
         self.mlp = nn.Linear(in_dim, out_dim)
         self.norm = nn.LayerNorm(out_dim)
+        self.bnorm = nn.BatchNorm2d(out_dim)
         self.gelu = nn.GELU()
 
     def forward(self, x):
+        B, C, H, W = x.shape
         x = self.drop(x)
         x = self.mlp(x)
-        x = self.norm(x)
+        if B > 1:
+            x = x.permute(0, 3, 1, 2)
+            x = self.bnorm(x)
+            x = x.permute(0, 2, 3, 1)
+        else:
+            x = self.norm(x)
         x = self.gelu(x)
         return x
 
@@ -55,6 +67,7 @@ class REM(nn.Module):
                                 BasicConv2d(64, out_dim, kernel_size=3, padding=1, prob=dropout))
         
         self.inorm = nn.InstanceNorm2d(in_dim)
+        self.bnorm = nn.BatchNorm2d(in_dim)
         self.dropout = nn.Dropout2d(p=dropout)
 
         #self.norm = nn.LayerNorm(in_dim)
@@ -69,9 +82,14 @@ class REM(nn.Module):
         '''
         x: (H, W, in_dim) range image
         '''
+        B, C, H, W = x.shape
 
         #x = self.dropout(x)
-        x = self.inorm(x)
+        
+        if B > 1:
+            x = self.bnorm(x)
+        else:
+            x = self.inorm(x)
         x = self.convs(x)
 
         #x = self.norm(x)
@@ -148,34 +166,37 @@ class SemanticHead(nn.Module):
 class RangeRet(nn.Module):
     def __init__(self, model_params: dict, img_size=(64, 1024), activate_recurrent=False):
         super(RangeRet, self).__init__()
-        self.H = model_params['H']
-        self.W = model_params['W']
+        self.H, self.W = img_size
+        self.img_size = img_size
         self.patch_size = model_params['patch_size']
         self.stride = model_params['stride']
         self.in_dim = model_params['input_dims']
         self.rem_dim = model_params['rem_dim']
         self.decoder_dim = model_params['decoder_dim']
 
-        # retnet parameters
-        self.layers = model_params['retnet']['layers']
-        self.hidden_dim = model_params['retnet']['hidden_dim']
-        self.ffn_size = model_params['retnet']['ffn_size']
-        self.num_head = model_params['retnet']['num_head']
-        self.double_v_dim = model_params['retnet']['double_v_dim']
+        # retnet params
+        self.embed_dims = model_params['embed_dims']
+        self.heads = model_params['heads']
+        self.mlp_dim = model_params['mlp_dim']
+        self.blocks = model_params['blocks']
 
-        self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
-                              math.floor((self.W - self.patch_size) / self.stride) + 1)
+        #self.patched_image = (math.floor((self.H - self.patch_size) / self.stride) + 1,
+        #                      math.floor((self.W - self.patch_size) / self.stride) + 1)
 
-        print(f'Patched image size = {self.patched_image}')
+        #print(f'Patched image size = {self.patched_image}')
 
         self.rem = REM(self.in_dim, self.rem_dim, dropout=0.0)
         
-        self.model = PyramidRetNet(img_size=(64, 1024), patch_size=(7, 5, 3), strides=(4, 3, 2), in_dim=128, double_v_dim=True)
+        self.model = PyramidRetNet(img_size=self.img_size,
+                                   patch_size=self.patch_size,
+                                   strides=self.stride,
+                                   in_dim=self.rem_dim,
+                                   double_v_dim=True,
+                                   embed_dims=self.embed_dims,
+                                   heads=self.heads,
+                                   mlp_dim=self.mlp_dim,
+                                   blocks=self.blocks)
         
-        #self.viembed = VisionEmbedding(self.H, self.W, self.patch_size, self.rem_dim, self.rem_dim, self.stride) # H, W, patch size, input channel, output features
-        # TODO add 4 stages of RetNet with different downsampling
-        #self.retnet = RetNet(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image, self.double_v_dim, activate_recurrent) #layers=4, hidden_dim=128, ffn_size=256, num_head=4, (patched_image_h, patched_image_w), v_dim=double
-        # TODO set 4 decoders as the number of stages for downsampling
         self.head = SemanticHead([128, 128, 256], 128, self.H, self.W, 20)
 
         # transformers for ablation study
@@ -185,13 +206,7 @@ class RangeRet(nn.Module):
         # TODO for better performance dont use different vars
         rem_out = self.rem(x)
 
-        #patches = self.viembed(rem_out)
-
-        #ret_out = self.retnet(patches)
-
         ret_out = self.model(rem_out)
-
-        #ret_out = self.transformers(patches)
 
         out = self.head(ret_out, rem_out)
 

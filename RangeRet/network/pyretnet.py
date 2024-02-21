@@ -9,11 +9,19 @@ from utils.vision_embedding import VisionEmbedding
 #from network.retention import MultiScaleRetention
 from network.msr import MultiScaleRetention
 
-def compute_slen(H, W, patch_size, stride):
+def divide_tuple(data, divisor):
+    return tuple(elem // divisor for elem in data)
+
+def patchify_image(H, W, patch_size, stride):
     '''
-    Compute sequence length of an image given its shape and convolution parameters
+    Compute patched image due to convolution operator
+
+    Return (newH, newW), slen
     '''
-    return (math.floor((H - patch_size) / stride) + 1) * (math.floor((W - patch_size) / stride) + 1)
+    newH = math.floor((H - patch_size) / stride) + 1 
+    newW = math.floor((W - patch_size) / stride) + 1
+
+    return (newH, newW), newH*newW
 
 class MLP(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim):
@@ -32,7 +40,7 @@ class MLP(nn.Module):
         return x
 
 class Block(nn.Module):
-    def __init__(self, dim, heads, mlp_dim, ratio=1):
+    def __init__(self, dim, heads, mlp_dim):
         super().__init__()
 
         self.ret = MultiScaleRetention(dim, heads, double_v_dim=True)
@@ -49,8 +57,10 @@ class Block(nn.Module):
 
 class PyramidRetNet(nn.Module):
     def __init__(self, img_size, patch_size=[7, 5, 3], strides=[4, 3, 2], in_dim=128, double_v_dim=True, embed_dims=[128, 128, 256],
-                 heads=[4, 4, 4], mlp_dim=[256, 256, 512], blocks=[3, 4, 6], ratio=[16, 8, 2, 1]):
+                 heads=[4, 4, 4], mlp_dim=[256, 256, 512], blocks=[3, 4, 6]):
         super().__init__()
+
+        self.img_size = img_size
 
         self.viembed1 = VisionEmbedding(H=img_size[0],
                                        W=img_size[1],
@@ -77,19 +87,25 @@ class PyramidRetNet(nn.Module):
         #                               embed_dim=embed_dims[3],
         #                               stride=1)
 
-        # TODO remove refactor code
-        self.mask1 = self.get_rel_pos(head_dim=embed_dims[0], num_head=heads[0], slen=3825, img_dim=(15, 255))
-        self.mask2 = self.get_rel_pos(head_dim=embed_dims[1], num_head=heads[1], slen=1700, img_dim=(10, 170))
-        self.mask3 = self.get_rel_pos(head_dim=embed_dims[2], num_head=heads[2], slen=889, img_dim=(7, 127))
+        self.img_dim1, self.slen1 = patchify_image(*img_size, patch_size[0], strides[0])
+        self.img_dim2, self.slen2 = patchify_image(*divide_tuple(img_size, 2), patch_size[1], strides[1])
+        self.img_dim3, self.slen3 = patchify_image(*divide_tuple(img_size, 4), patch_size[2], strides[2])
+        print(f'STAGE 1: patched image: {self.img_dim1} | slen: {self.slen1}')
+        print(f'STAGE 2: patched image: {self.img_dim2} | slen: {self.slen2}')
+        print(f'STAGE 3: patched image: {self.img_dim3} | slen: {self.slen3}')
+
+        self.mask1 = self.get_rel_pos(head_dim=embed_dims[0], num_head=heads[0], slen=self.slen1, img_dim=self.img_dim1)
+        self.mask2 = self.get_rel_pos(head_dim=embed_dims[1], num_head=heads[1], slen=self.slen2, img_dim=self.img_dim2)
+        self.mask3 = self.get_rel_pos(head_dim=embed_dims[2], num_head=heads[2], slen=self.slen3, img_dim=self.img_dim3)
 
         self.block1 = nn.ModuleList([Block(
-            dim=embed_dims[0], heads=heads[0], mlp_dim=mlp_dim[0], ratio=ratio[0]
+            dim=embed_dims[0], heads=heads[0], mlp_dim=mlp_dim[0]
             ) for _ in range(blocks[0])])
         self.block2 = nn.ModuleList([Block(
-            dim=embed_dims[1], heads=heads[1], mlp_dim=mlp_dim[1], ratio=ratio[1]
+            dim=embed_dims[1], heads=heads[1], mlp_dim=mlp_dim[1]
             ) for _ in range(blocks[1])])
         self.block3 = nn.ModuleList([Block(
-            dim=embed_dims[2], heads=heads[2], mlp_dim=mlp_dim[2], ratio=ratio[2]
+            dim=embed_dims[2], heads=heads[2], mlp_dim=mlp_dim[2]
             ) for _ in range(blocks[2])])
         #self.block4 = nn.ModuleList([Block(
         #    dim=embed_dims[3], heads=heads[3], mlp_dim=mlp_dim[3], ratio=ratio[3]
@@ -149,15 +165,15 @@ class PyramidRetNet(nn.Module):
         outs = []
 
         # for residual connections
-        _x = F.interpolate(x, size=(32, 512), mode='bilinear')
-        _x2 = F.interpolate(x, size=(16, 256), mode='bilinear')
+        _x = F.interpolate(x, size=divide_tuple(self.img_size, 2), mode='bilinear')
+        _x2 = F.interpolate(x, size=divide_tuple(self.img_size, 4), mode='bilinear')
 
         x, H, W = self.viembed1(x)
         for i, blk in enumerate(self.block1):
             x = blk(x, self.mask1)
         x = self.norm1(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        x = F.interpolate(x, size=(32, 512), mode='bilinear')
+        x = F.interpolate(x, size=divide_tuple(self.img_size, 2), mode='bilinear')
         x = x + _x
         outs.append(x.permute(0, 2, 3, 1))
 
@@ -166,7 +182,7 @@ class PyramidRetNet(nn.Module):
             x = blk(x, self.mask2)
         x = self.norm2(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        x = F.interpolate(x, size=(16, 256), mode='bilinear')
+        x = F.interpolate(x, size=divide_tuple(self.img_size, 4), mode='bilinear')
         x = x + _x2
         outs.append(x.permute(0, 2, 3, 1))
 
@@ -175,7 +191,7 @@ class PyramidRetNet(nn.Module):
             x = blk(x, self.mask3)
         x = self.norm3(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-        x = F.interpolate(x, size=(16, 256), mode='bilinear')
+        x = F.interpolate(x, size=divide_tuple(self.img_size, 4), mode='bilinear')
         outs.append(x.permute(0, 2, 3, 1))
 
         #x, H, W = self.viembed4(x)
