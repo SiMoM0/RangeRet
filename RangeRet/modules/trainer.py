@@ -208,11 +208,7 @@ class Trainer():
 
                 loss += 0.5 * (cl + ll + fl)
 
-            if self.n_gpus > 1:
-                idx = torch.ones(self.n_gpus).cuda()
-                loss.backward(idx)
-            else:
-                loss.backward()
+            loss.backward()
 
             optimizer.step()
 
