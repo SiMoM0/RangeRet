@@ -72,8 +72,8 @@ if __name__ == '__main__':
     print("log", FLAGS.log)
     print("pretrained", FLAGS.model)
     print("----------\n")
-    print("Commit hash (training version): ", str(
-        subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()))
+    #print("Commit hash (training version): ", str(
+    #    subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()))
     print("----------\n")
 
     # open arch config file

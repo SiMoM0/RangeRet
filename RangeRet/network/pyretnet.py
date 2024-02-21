@@ -148,12 +148,17 @@ class PyramidRetNet(nn.Module):
         B = x.shape[0]
         outs = []
 
+        # for residual connections
+        _x = F.interpolate(x, size=(32, 512), mode='bilinear')
+        _x2 = F.interpolate(x, size=(16, 256), mode='bilinear')
+
         x, H, W = self.viembed1(x)
         for i, blk in enumerate(self.block1):
             x = blk(x, self.mask1)
         x = self.norm1(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x = F.interpolate(x, size=(32, 512), mode='bilinear')
+        x = x + _x
         outs.append(x.permute(0, 2, 3, 1))
 
         x, H, W = self.viembed2(x)
@@ -162,6 +167,7 @@ class PyramidRetNet(nn.Module):
         x = self.norm2(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
         x = F.interpolate(x, size=(16, 256), mode='bilinear')
+        x = x + _x2
         outs.append(x.permute(0, 2, 3, 1))
 
         x, H, W = self.viembed3(x)
