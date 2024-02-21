@@ -14,6 +14,8 @@ from utils.ioueval import iouEval
 from utils.lovasz_loss import Lovasz_loss
 from utils.focal_loss import FocalLoss
 
+from utils.sync_batchnorm.batchnorm import convert_model
+
 from network.rangeret import RangeRet
 
 from dataloader.kitti.parser import Parser
@@ -78,19 +80,23 @@ class Trainer():
             self.n_gpus = 1
             self.model.cuda()
 
-        # TODO: implement multi-gpu support
-        #if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        #    print("Let's use", torch.cuda.device_count(), "GPUs!")
-        #    self.model = nn.DataParallel(self.model)  # spread in gpus
-        #    self.model = convert_model(self.model).cuda()  # sync batchnorm
-        #    self.model_single = self.model.module  # single model to get weight names
-        #    self.multi_gpu = True
-        #    self.n_gpus = torch.cuda.device_count()
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            self.model = nn.DataParallel(self.model)  # spread in gpus
+            self.model = convert_model(self.model).cuda()  # sync batchnorm
+            self.model_single = self.model.module  # single model to get weight names
+            self.multi_gpu = True
+            self.n_gpus = torch.cuda.device_count()
 
         # Losses
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, weight=self.loss_w).to(self.device)
         self.lovasz = Lovasz_loss(ignore=0).to(self.device)
         self.focal = FocalLoss(gamma=2.0, ignore_index=0).to(self.device)
+        # loss as dataparallel too (more images in batch)
+        if self.n_gpus > 1:
+            self.criterion = nn.DataParallel(self.criterion).cuda()
+            self.lovasz = nn.DataParallel(self.lovasz).cuda()
+            self.focal = nn.DataParallel(self.focal).cuda()
 
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=0.01, steps_per_epoch=len(self.parser.get_train_set()), epochs=self.ARCH['train']['epochs'], pct_start=0.02)
@@ -150,7 +156,7 @@ class Trainer():
                     print('Best mIoU in validation so far, model saved!')
                     best_val_iou = val_iou
                     # TODO save the weights
-                    torch.save(self.model.state_dict(), os.path.join(self.logdir, f"{self.ARCH['model_params']['model_architecture']}-train.pt"))
+                    torch.save(self.model_single.state_dict(), os.path.join(self.logdir, f"{self.ARCH['model_params']['model_architecture']}-train.pt"))
             
             # update log
             log_data.append((acc, iou, loss, val_acc, val_iou, val_loss))
@@ -159,7 +165,7 @@ class Trainer():
         log_data = np.array(log_data, dtype=np.float32)
         np.savetxt(os.path.join(self.logdir, 'training_log.txt'), log_data, fmt='%f')
 
-        torch.save(self.model.state_dict(), os.path.join(self.logdir, f"{self.ARCH['model_params']['model_architecture']}-model.pt"))
+        torch.save(self.model_single.state_dict(), os.path.join(self.logdir, f"{self.ARCH['model_params']['model_architecture']}-model.pt"))
 
         print('Finished Training')
 
@@ -178,9 +184,10 @@ class Trainer():
         for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
             optimizer.zero_grad()
             
-            if self.gpu:
+            if not self.multi_gpu and self.gpu:
                 in_vol = in_vol.cuda()
-                proj_labels = proj_labels.cuda(non_blocking=True)
+            if self.gpu:
+                proj_labels = proj_labels.cuda(non_blocking=True).long()
 
             outputs = model(in_vol)
 
@@ -188,20 +195,24 @@ class Trainer():
 
             # compute loss
             # TODO use predictions from each stage ?
-            ce_loss = criterion(predictions, proj_labels.long())
-            lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels.long())
-            focal_loss = self.focal(predictions, proj_labels.long())
+            ce_loss = criterion(predictions, proj_labels)
+            lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels)
+            focal_loss = self.focal(predictions, proj_labels)
 
             loss = ce_loss + focal_loss + lovasz_loss
 
             for j in range(1, len(outputs)):
-                cl = criterion(outputs[j], proj_labels.long())
-                ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels.long())
-                fl = self.focal(outputs[j], proj_labels.long())
+                cl = criterion(outputs[j], proj_labels)
+                ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels)
+                fl = self.focal(outputs[j], proj_labels)
 
                 loss += 0.5 * (cl + ll + fl)
 
-            loss.backward()
+            if self.n_gpus > 1:
+                idx = torch.ones(self.n_gpus).cuda()
+                loss.backward(idx)
+            else:
+                loss.backward()
 
             optimizer.step()
 
@@ -233,9 +244,10 @@ class Trainer():
         with torch.no_grad():
             for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
 
-                if self.gpu:
+                if not self.multi_gpu and self.gpu:
                     in_vol = in_vol.cuda()
-                    proj_labels = proj_labels.cuda(non_blocking=True)
+                if self.gpu:
+                    proj_labels = proj_labels.cuda(non_blocking=True).long()
 
                 outputs = model(in_vol)
 
@@ -243,16 +255,16 @@ class Trainer():
 
                 # compute loss
                 # TODO use predictions from each stage ?
-                ce_loss = criterion(predictions, proj_labels.long())
-                lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels.long())
-                focal_loss = self.focal(predictions, proj_labels.long())
+                ce_loss = criterion(predictions, proj_labels)
+                lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels)
+                focal_loss = self.focal(predictions, proj_labels)
 
                 loss = ce_loss + focal_loss + lovasz_loss
 
                 for j in range(1, len(outputs)):
-                    cl = criterion(outputs[j], proj_labels.long())
-                    ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels.long())
-                    fl = self.focal(outputs[j], proj_labels.long())
+                    cl = criterion(outputs[j], proj_labels)
+                    ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels)
+                    fl = self.focal(outputs[j], proj_labels)
 
                     loss += 0.5 * (cl + ll + fl)
 
