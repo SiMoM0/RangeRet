@@ -19,6 +19,7 @@ from utils.sync_batchnorm.batchnorm import convert_model
 from network.rangeret import RangeRet
 
 from dataloader.kitti.parser import Parser
+from dataloader.rangeaug import RangeAugmentation
 
 class Trainer():
     def __init__(self, ARCH, DATA, datadir, logdir, path=None):
@@ -104,6 +105,9 @@ class Trainer():
         print(f'Optimizer: {self.optimizer}')
         print(f'Scheduler: {self.scheduler}')
 
+        # range augmentation (mix, union, paste, shift)
+        #self.range_aug = RangeAugmentation()
+
         # TODO add pretrained model config
 
     def train(self):
@@ -181,7 +185,7 @@ class Trainer():
 
         model.train()
 
-        for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
+        for i, (in_vol, proj_mask, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
             optimizer.zero_grad()
             
             if not self.multi_gpu and self.gpu:
@@ -189,12 +193,13 @@ class Trainer():
             if self.gpu:
                 proj_labels = proj_labels.cuda(non_blocking=True).long()
 
+            #in_vol, proj_labels = self.range_aug(in_vol, proj_labels, proj_mask)
+
             outputs = model(in_vol)
 
             predictions = outputs[0].permute(0, 3, 1, 2)
 
             # compute loss
-            # TODO use predictions from each stage ?
             ce_loss = criterion(predictions, proj_labels)
             lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels)
             focal_loss = self.focal(predictions, proj_labels)
