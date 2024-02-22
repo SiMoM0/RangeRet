@@ -106,7 +106,7 @@ class Trainer():
         print(f'Scheduler: {self.scheduler}')
 
         # range augmentation (mix, union, paste, shift)
-        #self.range_aug = RangeAugmentation()
+        self.range_aug = RangeAugmentation()
 
         # TODO add pretrained model config
 
@@ -193,7 +193,7 @@ class Trainer():
             if self.gpu:
                 proj_labels = proj_labels.cuda(non_blocking=True).long()
 
-            #in_vol, proj_labels = self.range_aug(in_vol, proj_labels, proj_mask)
+            in_vol, proj_labels = self.range_aug(in_vol, proj_labels, proj_mask)
 
             outputs = model(in_vol)
 

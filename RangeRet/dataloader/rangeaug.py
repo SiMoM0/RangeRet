@@ -1,20 +1,43 @@
 import torch
 import random
 
+def match_elements(n):
+    list1 = list(range(n))
+    finished = False
+    while not finished:
+        try:
+            list2 = list1.copy()
+            random.shuffle(list2)
+            matches = {}
+            not_allowed = set()
+            for i in range(n):
+                current_element = list1[i]
+                for j in range(n):
+                    if list2[j] != current_element and (current_element, list2[j]) not in not_allowed:
+                        matches[current_element] = list2[j]
+                        not_allowed.add((current_element, list2[j]))
+                        del list2[j]
+                        break
+            finished = True
+        except:
+            finished = False
+
+    return matches
+
 class RangeAugmentation():
     def __init__(self, aug_prob=[0.9, 0.2, 0.9, 1.0]):
         self.aug_prob = aug_prob
 
     def __call__(self, data, label, mask) -> torch.Any:
-        B, C, H, W = data.shape
+        B, _, _, _ = data.shape
         if B < 2:
             return data, label
 
         out_scan = []
         out_label = []
+        match_dict = match_elements(B)
         for i in range(B):
-            # TODO check this issue
-            j = i
+            j = match_dict[i]
 
             scan_a, scan_b = data[i].clone(), data[j]
             label_a, label_b = label[i].clone(), label[j]
@@ -35,10 +58,7 @@ class RangeAugmentation():
         out_scan = torch.stack(out_scan)
         out_label = torch.stack(out_label)
 
-        print(out_scan.shape)
-        print(out_label.shape)
-
-        return out_scan, out_label
+        return out_scan, out_label.long()
 
     def RangeMix(self, scan_a, label_a, scan_b, label_b, mix_strategies=[2, 3, 4, 5]):
         B, H, W = scan_a.shape
@@ -62,7 +82,7 @@ class RangeAugmentation():
     def RangeUnion(self, scan_a, label_a, mask, scan_b, label_b, k=0.5):
         void = mask == 0
         mask_temp = torch.rand(void.shape, device=void.device) <= k
-        # only fill 50% of the points
+        # only fill 50% of the void points
         void = void.logical_and(mask_temp)
         scan_a[:, void], label_a[void] = scan_b[:, void], label_b[void]
         return scan_a, label_a
