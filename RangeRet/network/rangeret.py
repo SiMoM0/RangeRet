@@ -23,10 +23,8 @@ class BasicConv2d(nn.Module):
         B, C, H, W = x.shape
         x = self.drop(x)
         x = self.conv(x)
-        if B > 1:
-            x = self.bnorm(x)
-        else:
-            x = self.norm(x)
+        x = self.bnorm(x)
+        #x = self.norm(x)
         x = self.gelu(x)
         return x
 
@@ -43,12 +41,10 @@ class MLP(nn.Module):
         B, C, H, W = x.shape
         x = self.drop(x)
         x = self.mlp(x)
-        if B > 1:
-            x = x.permute(0, 3, 1, 2)
-            x = self.bnorm(x)
-            x = x.permute(0, 2, 3, 1)
-        else:
-            x = self.norm(x)
+        x = x.permute(0, 3, 1, 2)
+        x = self.bnorm(x)
+        x = x.permute(0, 2, 3, 1)
+        #x = self.norm(x)
         x = self.gelu(x)
         return x
 
@@ -86,10 +82,8 @@ class REM(nn.Module):
 
         #x = self.dropout(x)
         
-        if B > 1:
-            x = self.bnorm(x)
-        else:
-            x = self.inorm(x)
+        x = self.bnorm(x)
+        #x = self.inorm(x)
         x = self.convs(x)
 
         #x = self.norm(x)
