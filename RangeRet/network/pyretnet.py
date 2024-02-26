@@ -111,9 +111,9 @@ class PyramidRetNet(nn.Module):
         #    dim=embed_dims[3], heads=heads[3], mlp_dim=mlp_dim[3], ratio=ratio[3]
         #    ) for _ in range(blocks[3])])
 
-        self.norm1 = nn.LayerNorm(embed_dims[0])
-        self.norm2 = nn.LayerNorm(embed_dims[1])
-        self.norm3 = nn.LayerNorm(embed_dims[2])
+        self.norm1 = nn.BatchNorm2d(embed_dims[0])
+        self.norm2 = nn.BatchNorm2d(embed_dims[1])
+        self.norm3 = nn.BatchNorm2d(embed_dims[2])
         #self.norm4 = nn.LayerNorm(embed_dims[3])
 
     def get_rel_pos(self, head_dim, num_head, slen, img_dim, activate_recurrent=False, manhattan=True):
@@ -171,8 +171,8 @@ class PyramidRetNet(nn.Module):
         x, H, W = self.viembed1(x)
         for i, blk in enumerate(self.block1):
             x = blk(x, self.mask1)
-        x = self.norm1(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+        x = self.norm1(x)
         x = F.interpolate(x, size=divide_tuple(self.img_size, 2), mode='bilinear')
         x = x + _x
         outs.append(x.permute(0, 2, 3, 1))
@@ -180,8 +180,8 @@ class PyramidRetNet(nn.Module):
         x, H, W = self.viembed2(x)
         for i, blk in enumerate(self.block2):
             x = blk(x, self.mask2)
-        x = self.norm2(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+        x = self.norm2(x)
         x = F.interpolate(x, size=divide_tuple(self.img_size, 4), mode='bilinear')
         x = x + _x2
         outs.append(x.permute(0, 2, 3, 1))
@@ -189,8 +189,8 @@ class PyramidRetNet(nn.Module):
         x, H, W = self.viembed3(x)
         for i, blk in enumerate(self.block3):
             x = blk(x, self.mask3)
-        x = self.norm3(x)
         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+        x = self.norm3(x)
         x = F.interpolate(x, size=divide_tuple(self.img_size, 4), mode='bilinear')
         outs.append(x.permute(0, 2, 3, 1))
 
