@@ -106,7 +106,7 @@ class Trainer():
         print(f'Scheduler: {self.scheduler}')
 
         # range augmentation (mix, union, paste, shift)
-        self.range_aug = RangeAugmentation()
+        #self.range_aug = RangeAugmentation()
 
         # TODO add pretrained model config
 
@@ -185,17 +185,23 @@ class Trainer():
 
         model.train()
 
-        for i, (in_vol, proj_mask, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
+        for i, (in_vol, proj_mask, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, unproj_xyz, _, unproj_remissions, n_points, neighbors) in tqdm(enumerate(train_loader), total=len(train_loader)):
             optimizer.zero_grad()
             
             if not self.multi_gpu and self.gpu:
                 in_vol = in_vol.cuda()
+                p_x = p_x[0, :n_points].cuda()
+                p_y = p_y[0, :n_points].cuda()
+                unproj_xyz = unproj_xyz[:, :n_points].cuda()
+                unproj_range = unproj_range[:, :n_points].cuda()
+                unproj_remissions = unproj_remissions[:, :n_points].cuda()
+                neighbors = neighbors.cuda()
             if self.gpu:
                 proj_labels = proj_labels.cuda(non_blocking=True).long()
 
-            in_vol, proj_labels = self.range_aug(in_vol, proj_labels, proj_mask)
+            #in_vol, proj_labels = self.range_aug(in_vol, proj_labels, proj_mask)
 
-            outputs = model(in_vol)
+            outputs = model((unproj_xyz, unproj_remissions, unproj_range, p_x, p_y), neighbors)
 
             predictions = outputs[0].permute(0, 3, 1, 2)
 
@@ -243,14 +249,20 @@ class Trainer():
         evaluator.reset()
 
         with torch.no_grad():
-            for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, _, _, _, _) in tqdm(enumerate(val_loader), total=len(val_loader)):
+            for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, unproj_xyz, _, unproj_remissions, n_points, neighbors) in tqdm(enumerate(val_loader), total=len(val_loader)):
 
                 if not self.multi_gpu and self.gpu:
                     in_vol = in_vol.cuda()
+                    p_x = p_x[0, :n_points].cuda()
+                    p_y = p_y[0, :n_points].cuda()
+                    unproj_xyz = unproj_xyz[:, :n_points].cuda()
+                    unproj_range = unproj_range[:, :n_points].cuda()
+                    unproj_remissions = unproj_remissions[:, :n_points].cuda()
+                    neighbors = neighbors.cuda()
                 if self.gpu:
                     proj_labels = proj_labels.cuda(non_blocking=True).long()
 
-                outputs = model(in_vol)
+                outputs = model((unproj_xyz, unproj_remissions, unproj_range, p_x, p_y), neighbors)
 
                 predictions = outputs[0].permute(0, 3, 1, 2)
 

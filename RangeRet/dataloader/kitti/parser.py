@@ -185,6 +185,9 @@ class SemanticKitti(Dataset):
     # print("path_seq", path_seq)
     # print("path_name", path_name)
 
+    # get neighbors
+    neighbors_emb = torch.from_numpy(scan.neighbors_emb)
+
     # TODO shift augmentation
     #proj_, proj_labels_ = proj.copy(), proj_labels.copy()
     #p = random.randint(int(0.25*self.sensor_img_W), int(0.75*self.sensor_img_W))
@@ -192,7 +195,7 @@ class SemanticKitti(Dataset):
     #proj_labels_ = np.concatenate(proj_labels_[p:, :], proj_labels_[:p, :], axis=1)
 
     # return
-    return proj, proj_mask, proj_labels, unproj_labels, path_seq, path_name, proj_x, proj_y, proj_range, unproj_range, proj_xyz, unproj_xyz, proj_remission, unproj_remissions, unproj_n_points
+    return proj, proj_mask, proj_labels, unproj_labels, path_seq, path_name, proj_x, proj_y, proj_range, unproj_range, proj_xyz, unproj_xyz, proj_remission, unproj_remissions, unproj_n_points, neighbors_emb
 
   def __len__(self):
     return len(self.scan_files)

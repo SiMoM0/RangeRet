@@ -3,6 +3,7 @@
 # This file is covered by the LICENSE file in the root of this project.
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from dataloader.augmentation import augmentation
 
@@ -17,6 +18,7 @@ class LaserScan:
     self.proj_W = W
     self.proj_fov_up = fov_up
     self.proj_fov_down = fov_down
+    self.num_neighbors = 16
     self.reset()
 
   def reset(self):
@@ -51,6 +53,8 @@ class LaserScan:
     # mask containing for each pixel, if it contains a point or not
     self.proj_mask = np.zeros((self.proj_H, self.proj_W),
                               dtype=np.int32)       # [H,W] mask
+    
+    self.neighbors_emb = np.zeros((0, self.num_neighbors), dtype=np.float32)  # [m, k]
 
   def size(self):
     """ Return the size of the point cloud. """
@@ -166,6 +170,12 @@ class LaserScan:
     remission = self.remissions[order]
     proj_y = proj_y[order]
     proj_x = proj_x[order]
+
+    # get neighbors for point embedding
+    kdtree = cKDTree(self.points[:, :3])
+    num_neighbors = 16
+    _, neighbors_emb = kdtree.query(self.points, k=num_neighbors+1)
+    self.neighbors_emb = neighbors_emb
 
     # assing to images
     self.proj_range[proj_y, proj_x] = depth

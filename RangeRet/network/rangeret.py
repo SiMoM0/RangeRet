@@ -93,6 +93,82 @@ class REM(nn.Module):
 
         return x
 
+class Embedding(nn.Module):
+    def __init__(self, in_dim=5, out_dim=128, neighbors=16, H=64, W=1024):
+        super(Embedding, self).__init__()
+        self.H = H
+        self.W = W
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.neighbors = neighbors
+
+        # input normalization
+        self.norm = nn.BatchNorm1d(in_dim)
+
+        # raw point embedding
+        self.conv1 = nn.Conv1d(in_dim, out_dim, kernel_size=1)
+
+        # neighborhood embedding
+        self.conv2 = nn.Sequential(
+            nn.BatchNorm2d(in_dim),
+            nn.Conv2d(in_dim, out_dim, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_dim),
+            nn.GELU(),
+            nn.Conv2d(out_dim, out_dim, kernel_size=1, bias=False)
+        )
+
+        # merge points and neighborhood embeddings
+        self.final = nn.Conv1d(2 * out_dim, out_dim, kernel_size=1, bias=True, padding=0)
+
+    def forward(self, pc, neighbors, px, py):
+        #print('Poitn cloud shape: ', pc.shape)
+        #print('Neighbors shape: ', neighbors.shape)
+        # transpose channels and number of points
+        pc = pc.transpose(1, 2)
+        neighbors = neighbors.transpose(1, 2)
+
+        B, _, N = pc.shape
+
+        #print('Transpose pc: ', pc.shape)
+        #print('Transpose neighbors: ', neighbors.shape)
+
+        pc = self.norm(pc)
+
+        #print('point cloud normalized: ', pc.shape)
+
+        # point embedding
+        point_emb = self.conv1(pc)
+        #print('point embedding: ', point_emb.shape)
+
+        gather = []
+        # gather neighbors around center point
+        for ind_nn in range(1, neighbors.shape[1]): # remove first neighbors which is center point
+            temp = neighbors[:, ind_nn:ind_nn+1, :].expand(-1, pc.shape[1], -1)
+            #print('temp: ', temp.shape)
+            gather.append(torch.gather(pc, 2, temp).unsqueeze(-1))
+
+        # relative coordinates
+        neigh_emb = torch.cat(gather, -1) - pc.unsqueeze(-1)
+        #print('relative coordinates: ', neigh_emb.shape)
+        # embedding
+        neigh_emb = self.conv2(neigh_emb).max(-1)[0]
+        #print('neighbors embeddings: ', neigh_emb.shape)
+
+        feats = self.final(torch.cat([point_emb, neigh_emb], dim=1))
+        #print('final feats: ', feats.shape)
+
+        # create range image with features
+        proj_feat = torch.full([self.H, self.W, self.out_dim], -1, dtype=torch.float32).to(feats.device)
+        #print('proj_feat: ', proj_feat.shape)
+        #print('px: ', px.shape)
+        #print('py: ', py.shape)
+        #print('feats: ', feats.shape)
+        proj_feat[py, px] = feats.transpose(1, 2).squeeze(0)
+        #print('proj_feat: ', proj_feat.shape)
+
+        return proj_feat.permute(2, 0, 1).unsqueeze(0)
+
+
 class SemanticHead(nn.Module):
     '''
     Semantic Head: two MLP layers to map feature dimension into number of classes
@@ -179,8 +255,10 @@ class RangeRet(nn.Module):
 
         #print(f'Patched image size = {self.patched_image}')
 
-        self.rem = REM(self.in_dim, self.rem_dim, dropout=0.0)
+        #self.rem = REM(self.in_dim, self.rem_dim, dropout=0.0)
         
+        self.embedding = Embedding(self.in_dim, self.rem_dim, H=self.H, W=self.W)
+
         self.model = PyramidRetNet(img_size=self.img_size,
                                    patch_size=self.patch_size,
                                    strides=self.stride,
@@ -196,9 +274,14 @@ class RangeRet(nn.Module):
         # transformers for ablation study
         #self.transformers = Transformers(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image)
     
-    def forward(self, x):
+    def forward(self, x, neighbors):
+        # extract and prepare input
+        pc = torch.cat([x[0], x[1].unsqueeze(-1), x[2].unsqueeze(-1)], dim=-1)
+        px = x[3]
+        py = x[4]
+
         # TODO for better performance dont use different vars
-        rem_out = self.rem(x)
+        rem_out = self.embedding(pc, neighbors, px, py)
 
         ret_out = self.model(rem_out)
 
