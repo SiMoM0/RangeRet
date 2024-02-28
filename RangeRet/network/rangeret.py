@@ -166,8 +166,10 @@ class Embedding(nn.Module):
             p_x = px[i, :npoints[i]]
             p_y = py[i, :npoints[i]]
 
-            proj[p_y, p_x] = feats[i, :, :npoints[i]]
+            proj[p_y, p_x] = feats[i, :npoints[i], :]
             proj_feat.append(proj)
+
+        proj_feat = torch.stack(proj_feat)
 
         # TODO use scatter_ as alternative (faster but drawbacks)
 
