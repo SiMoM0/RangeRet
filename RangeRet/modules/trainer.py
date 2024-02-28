@@ -190,11 +190,11 @@ class Trainer():
             
             if not self.multi_gpu and self.gpu:
                 in_vol = in_vol.cuda()
-                p_x = p_x[0, :n_points].cuda()
-                p_y = p_y[0, :n_points].cuda()
-                unproj_xyz = unproj_xyz[:, :n_points].cuda()
-                unproj_range = unproj_range[:, :n_points].cuda()
-                unproj_remissions = unproj_remissions[:, :n_points].cuda()
+                p_x = p_x.cuda()
+                p_y = p_y.cuda()
+                unproj_xyz = unproj_xyz.cuda()
+                unproj_range = unproj_range.cuda()
+                unproj_remissions = unproj_remissions.cuda()
                 neighbors = neighbors.cuda()
             if self.gpu:
                 proj_labels = proj_labels.cuda(non_blocking=True).long()
@@ -204,7 +204,7 @@ class Trainer():
             # input
             inputs = torch.cat([unproj_xyz, unproj_remissions.unsqueeze(-1), unproj_range.unsqueeze(-1)], dim=-1)
 
-            outputs = model((inputs, p_x, p_y), neighbors)
+            outputs = model((inputs, p_x, p_y), neighbors, n_points)
 
             predictions = outputs[0].permute(0, 3, 1, 2)
 
@@ -256,11 +256,11 @@ class Trainer():
 
                 if not self.multi_gpu and self.gpu:
                     in_vol = in_vol.cuda()
-                    p_x = p_x[0, :n_points].cuda()
-                    p_y = p_y[0, :n_points].cuda()
-                    unproj_xyz = unproj_xyz[:, :n_points].cuda()
-                    unproj_range = unproj_range[:, :n_points].cuda()
-                    unproj_remissions = unproj_remissions[:, :n_points].cuda()
+                    p_x = p_x.cuda()
+                    p_y = p_y.cuda()
+                    unproj_xyz = unproj_xyz.cuda()
+                    unproj_range = unproj_range.cuda()
+                    unproj_remissions = unproj_remissions.cuda()
                     neighbors = neighbors.cuda()
                 if self.gpu:
                     proj_labels = proj_labels.cuda(non_blocking=True).long()
@@ -268,7 +268,7 @@ class Trainer():
                 # input
                 inputs = torch.cat([unproj_xyz, unproj_remissions.unsqueeze(-1), unproj_range.unsqueeze(-1)], dim=-1)
 
-                outputs = model((inputs, p_x, p_y), neighbors)
+                outputs = model((inputs, p_x, p_y), neighbors, n_points)
 
                 predictions = outputs[0].permute(0, 3, 1, 2)
 

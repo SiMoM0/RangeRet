@@ -120,7 +120,7 @@ class Embedding(nn.Module):
         # merge points and neighborhood embeddings
         self.final = nn.Conv1d(2 * out_dim, out_dim, kernel_size=1, bias=True, padding=0)
 
-    def forward(self, pc, neighbors, px, py):
+    def forward(self, pc, neighbors, px, py, npoints):
         #print('Poitn cloud shape: ', pc.shape)
         #print('Neighbors shape: ', neighbors.shape)
         # transpose channels and number of points
@@ -154,19 +154,31 @@ class Embedding(nn.Module):
         neigh_emb = self.conv2(neigh_emb).max(-1)[0]
         #print('neighbors embeddings: ', neigh_emb.shape)
 
-        feats = self.final(torch.cat([point_emb, neigh_emb], dim=1))
+        feats = self.final(torch.cat([point_emb, neigh_emb], dim=1))    # (B x C_out x N)
+        feats = feats.transpose(1, 2)
         #print('final feats: ', feats.shape)
 
         # create range image with features
-        proj_feat = torch.full([self.H, self.W, self.out_dim], -1, dtype=torch.float32).to(feats.device)
+        proj_feat = []
+
+        for i in range(B):
+            proj = torch.full((self.H, self.W, self.out_dim), -1, dtype=torch.float32).to(feats.device)
+            p_x = px[i, :npoints[i]]
+            p_y = py[i, :npoints[i]]
+
+            proj[p_y, p_x] = feats[i, :, :npoints[i]]
+            proj_feat.append(proj)
+
+        # TODO use scatter_ as alternative (faster but drawbacks)
+
         #print('proj_feat: ', proj_feat.shape)
         #print('px: ', px.shape)
         #print('py: ', py.shape)
         #print('feats: ', feats.shape)
-        proj_feat[py, px] = feats.transpose(1, 2).squeeze(0)
+        #proj_feat[py, px] = feats.transpose(1, 2).squeeze(0)
         #print('proj_feat: ', proj_feat.shape)
 
-        return proj_feat.permute(2, 0, 1).unsqueeze(0)
+        return proj_feat.permute(0, 3, 1, 2)
 
 
 class SemanticHead(nn.Module):
@@ -274,14 +286,14 @@ class RangeRet(nn.Module):
         # transformers for ablation study
         #self.transformers = Transformers(self.layers, self.hidden_dim, self.ffn_size, self.num_head, self.patched_image)
     
-    def forward(self, x, neighbors):
+    def forward(self, x, neighbors, npoints):
         # extract and prepare input
         pc = x[0]
         px = x[1]
         py = x[2]
 
         # TODO for better performance dont use different vars
-        rem_out = self.embedding(pc, neighbors, px, py)
+        rem_out = self.embedding(pc, neighbors, px, py, npoints)
 
         ret_out = self.model(rem_out)
 

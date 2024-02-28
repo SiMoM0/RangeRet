@@ -48,6 +48,7 @@ class SemanticKitti(Dataset):
     self.sensor_fov_up = sensor["fov_up"]
     self.sensor_fov_down = sensor["fov_down"]
     self.max_points = max_points
+    self.num_neighbors = 16 # add parameter in parser
     self.gt = gt
     self.aug = aug
 
@@ -186,7 +187,8 @@ class SemanticKitti(Dataset):
     # print("path_name", path_name)
 
     # get neighbors
-    neighbors_emb = torch.from_numpy(scan.neighbors_emb)
+    neighbors_emb = torch.full((self.max_points, self.num_neighbors+1), -1, dtype=torch.int64)
+    neighbors_emb[:unproj_n_points] = torch.from_numpy(scan.neighbors_emb)
 
     # TODO shift augmentation
     #proj_, proj_labels_ = proj.copy(), proj_labels.copy()
