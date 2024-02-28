@@ -13,6 +13,7 @@ from utils.avgmeter import AverageMeter
 from utils.ioueval import iouEval
 from utils.lovasz_loss import Lovasz_loss
 from utils.focal_loss import FocalLoss
+from utils.boundary_loss import BoundaryLoss
 
 from utils.sync_batchnorm.batchnorm import convert_model
 
@@ -91,6 +92,7 @@ class Trainer():
 
         # Losses
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, weight=self.loss_w).to(self.device)
+        self.boundary = BoundaryLoss().to(self.device)
         self.lovasz = Lovasz_loss(ignore=0).to(self.device)
         self.focal = FocalLoss(gamma=2.0, ignore_index=0).to(self.device)
         # loss as dataparallel too (more images in batch)
@@ -200,18 +202,22 @@ class Trainer():
             predictions = outputs[0].permute(0, 3, 1, 2)
 
             # compute loss
-            ce_loss = criterion(predictions, proj_labels)
+            #ce_loss = criterion(predictions, proj_labels)
+            bd_loss = self.boundary(F.softmax(predictions, dim=1), proj_labels)
             lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels)
             focal_loss = self.focal(predictions, proj_labels)
 
-            loss = ce_loss + focal_loss + lovasz_loss
+            #loss = ce_loss + focal_loss + lovasz_loss
+            loss = bd_loss + focal_loss + lovasz_loss
 
             for j in range(1, len(outputs)):
-                cl = criterion(outputs[j], proj_labels)
+                #cl = criterion(outputs[j], proj_labels)
+                bd = self.boundary(F.softmax(outputs[j], dim=1), proj_labels)
                 ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels)
                 fl = self.focal(outputs[j], proj_labels)
 
-                loss += 0.5 * (cl + ll + fl)
+                #loss += 0.5 * (cl + ll + fl)
+                loss += 0.5 * (bd + ll + fl)
 
             loss.backward()
 
@@ -256,18 +262,22 @@ class Trainer():
 
                 # compute loss
                 # TODO use predictions from each stage ?
-                ce_loss = criterion(predictions, proj_labels)
+                #ce_loss = criterion(predictions, proj_labels)
+                bd_loss = self.boundary(F.softmax(predictions, dim=1), proj_labels)
                 lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels)
                 focal_loss = self.focal(predictions, proj_labels)
 
-                loss = ce_loss + focal_loss + lovasz_loss
+                #loss = ce_loss + focal_loss + lovasz_loss
+                loss = bd_loss + focal_loss + lovasz_loss
 
                 for j in range(1, len(outputs)):
-                    cl = criterion(outputs[j], proj_labels)
+                    #cl = criterion(outputs[j], proj_labels)
+                    bd = self.boundary(F.softmax(outputs[j], dim=1), proj_labels)
                     ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels)
                     fl = self.focal(outputs[j], proj_labels)
 
-                    loss += 0.5 * (cl + ll + fl)
+                    #loss += 0.5 * (cl + ll + fl)
+                    loss += 0.5 * (bd + ll + fl)
 
                 argmax = predictions.argmax(dim=1)
                 evaluator.addBatch(argmax, proj_labels)
