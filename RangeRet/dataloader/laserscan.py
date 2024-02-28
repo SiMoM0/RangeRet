@@ -173,8 +173,8 @@ class LaserScan:
 
     # get neighbors for point embedding
     kdtree = cKDTree(self.points[:, :3])
-    num_neighbors = 16
-    _, neighbors_emb = kdtree.query(self.points, k=num_neighbors+1)
+    _, neighbors_emb = kdtree.query(self.points, k=self.num_neighbors+1)
+    # delete here the first neighbors (?)
     self.neighbors_emb = neighbors_emb
 
     # assing to images

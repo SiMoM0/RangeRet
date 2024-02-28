@@ -94,13 +94,13 @@ class MultiScaleRetention(nn.Module):
         q = q.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
         k = k.view(bsz, seq_len, self.heads, self.key_dim).transpose(1, 2)
 
-        qr = theta_shift(q, sin, cos)
-        kr = theta_shift(k, sin, cos)
+        #qr = theta_shift(q, sin, cos)
+        #kr = theta_shift(k, sin, cos)
 
         if incremental_state is not None:
-            output = self.recurrent_forward(qr, kr, v, inner_mask, incremental_state)
+            output = self.recurrent_forward(q, k, v, inner_mask, incremental_state)
         else:
-            output = self.parallel_forward(qr, kr, v, inner_mask)
+            output = self.parallel_forward(q, k, v, inner_mask)
 
         #output = self.group_norm(output.reshape(seq_len, self.head_size * self.heads)).reshape(bsz, seq_len, self.head_size * self.heads)
         output = self.group_norm(output).reshape(bsz, seq_len, self.head_size * self.heads)

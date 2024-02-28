@@ -276,9 +276,9 @@ class RangeRet(nn.Module):
     
     def forward(self, x, neighbors):
         # extract and prepare input
-        pc = torch.cat([x[0], x[1].unsqueeze(-1), x[2].unsqueeze(-1)], dim=-1)
-        px = x[3]
-        py = x[4]
+        pc = x[0]
+        px = x[1]
+        py = x[2]
 
         # TODO for better performance dont use different vars
         rem_out = self.embedding(pc, neighbors, px, py)

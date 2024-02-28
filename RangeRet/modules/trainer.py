@@ -185,7 +185,7 @@ class Trainer():
 
         model.train()
 
-        for i, (in_vol, proj_mask, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, unproj_xyz, _, unproj_remissions, n_points, neighbors) in tqdm(enumerate(train_loader), total=len(train_loader)):
+        for i, (in_vol, proj_mask, proj_labels, _, _, _, p_x, p_y, _, unproj_range, _, unproj_xyz, _, unproj_remissions, n_points, neighbors) in tqdm(enumerate(train_loader), total=len(train_loader)):
             optimizer.zero_grad()
             
             if not self.multi_gpu and self.gpu:
@@ -200,8 +200,11 @@ class Trainer():
                 proj_labels = proj_labels.cuda(non_blocking=True).long()
 
             #in_vol, proj_labels = self.range_aug(in_vol, proj_labels, proj_mask)
+                
+            # input
+            inputs = torch.cat([unproj_xyz, unproj_remissions.unsqueeze(-1), unproj_range.unsqueeze(-1)], dim=-1)
 
-            outputs = model((unproj_xyz, unproj_remissions, unproj_range, p_x, p_y), neighbors)
+            outputs = model((inputs, p_x, p_y), neighbors)
 
             predictions = outputs[0].permute(0, 3, 1, 2)
 
@@ -249,7 +252,7 @@ class Trainer():
         evaluator.reset()
 
         with torch.no_grad():
-            for i, (in_vol, _, proj_labels, unproj_labels, _, _, p_x, p_y, proj_range, unproj_range, _, unproj_xyz, _, unproj_remissions, n_points, neighbors) in tqdm(enumerate(val_loader), total=len(val_loader)):
+            for i, (in_vol, _, proj_labels, _, _, _, p_x, p_y, _, unproj_range, _, unproj_xyz, _, unproj_remissions, n_points, neighbors) in tqdm(enumerate(val_loader), total=len(val_loader)):
 
                 if not self.multi_gpu and self.gpu:
                     in_vol = in_vol.cuda()
@@ -262,7 +265,10 @@ class Trainer():
                 if self.gpu:
                     proj_labels = proj_labels.cuda(non_blocking=True).long()
 
-                outputs = model((unproj_xyz, unproj_remissions, unproj_range, p_x, p_y), neighbors)
+                # input
+                inputs = torch.cat([unproj_xyz, unproj_remissions.unsqueeze(-1), unproj_range.unsqueeze(-1)], dim=-1)
+
+                outputs = model((inputs, p_x, p_y), neighbors)
 
                 predictions = outputs[0].permute(0, 3, 1, 2)
 
