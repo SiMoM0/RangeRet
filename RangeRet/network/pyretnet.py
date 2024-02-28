@@ -23,25 +23,41 @@ def patchify_image(H, W, patch_size, stride):
 
     return (newH, newW), newH*newW
 
+class DWConv(nn.Module):
+    def __init__(self, dim=256):
+        super(DWConv, self).__init__()
+        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
+
+    def forward(self, x, H, W):
+        B, N, C = x.shape
+        x = x.transpose(1, 2).view(B, C, H, W)
+        x = self.dwconv(x)
+        x = x.flatten(2).transpose(1, 2)
+
+        return x
+
 class MLP(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.fc1 = nn.Linear(in_dim, hidden_dim)
+        self.dwconv = DWConv(hidden_dim)
         self.gelu = nn.GELU()
         self.fc2 = nn.Linear(hidden_dim, out_dim)
 
-    def forward(self, x):
+    def forward(self, x, H, W):
         B, N, C = x.shape
         x = self.fc1(x)
+        x = self.dwconv(x, H, W)
         x = self.gelu(x)
         x = self.fc2(x)
         
         return x
 
 class Block(nn.Module):
-    def __init__(self, dim, heads, mlp_dim):
+    def __init__(self, dim, heads, mlp_dim, img_dim):
         super().__init__()
+        self.img_dim = img_dim
 
         self.ret = MultiScaleRetention(dim, heads, double_v_dim=True)
         self.mlp = MLP(dim, mlp_dim, dim)
@@ -51,7 +67,7 @@ class Block(nn.Module):
 
     def forward(self, x, rel_pos):
         x = x + self.ret(self.norm1(x), rel_pos)
-        x = x + self.mlp(self.norm2(x))
+        x = x + self.mlp(self.norm2(x), *self.img_dim)
 
         return x
 
@@ -99,13 +115,13 @@ class PyramidRetNet(nn.Module):
         self.mask3 = self.get_rel_pos(head_dim=embed_dims[2], num_head=heads[2], slen=self.slen3, img_dim=self.img_dim3)
 
         self.block1 = nn.ModuleList([Block(
-            dim=embed_dims[0], heads=heads[0], mlp_dim=mlp_dim[0]
+            dim=embed_dims[0], heads=heads[0], mlp_dim=mlp_dim[0], img_dim=self.img_dim1
             ) for _ in range(blocks[0])])
         self.block2 = nn.ModuleList([Block(
-            dim=embed_dims[1], heads=heads[1], mlp_dim=mlp_dim[1]
+            dim=embed_dims[1], heads=heads[1], mlp_dim=mlp_dim[1], img_dim=self.img_dim2
             ) for _ in range(blocks[1])])
         self.block3 = nn.ModuleList([Block(
-            dim=embed_dims[2], heads=heads[2], mlp_dim=mlp_dim[2]
+            dim=embed_dims[2], heads=heads[2], mlp_dim=mlp_dim[2], img_dim=self.img_dim3
             ) for _ in range(blocks[2])])
         #self.block4 = nn.ModuleList([Block(
         #    dim=embed_dims[3], heads=heads[3], mlp_dim=mlp_dim[3], ratio=ratio[3]
