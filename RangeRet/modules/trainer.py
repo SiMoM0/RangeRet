@@ -14,6 +14,7 @@ from utils.ioueval import iouEval
 from utils.lovasz_loss import Lovasz_loss
 from utils.focal_loss import FocalLoss
 from utils.boundary_loss import BoundaryLoss
+from utils.cosine import CosineAnnealingWarmUpRestarts
 
 from utils.sync_batchnorm.batchnorm import convert_model
 
@@ -103,6 +104,12 @@ class Trainer():
 
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=0.01, steps_per_epoch=len(self.parser.get_train_set()), epochs=self.ARCH['train']['epochs'], pct_start=0.02)
+        #self.scheduler = CosineAnnealingWarmUpRestarts(self.optimizer,
+        #                                               T_0=self.ARCH['train']['epochs'] * self.parser.get_train_size(),
+        #                                               T_mult=1,
+        #                                               eta_max=0.01,
+        #                                               T_up=1,
+        #                                               gamma=1.0)
 
         print(f'Optimizer: {self.optimizer}')
         print(f'Scheduler: {self.scheduler}')
