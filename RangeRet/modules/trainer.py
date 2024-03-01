@@ -95,21 +95,22 @@ class Trainer():
         self.criterion = nn.CrossEntropyLoss(ignore_index=0, weight=self.loss_w).to(self.device)
         self.boundary = BoundaryLoss().to(self.device)
         self.lovasz = Lovasz_loss(ignore=0).to(self.device)
-        self.focal = FocalLoss(gamma=2.0, ignore_index=0).to(self.device)
+        #self.focal = FocalLoss(gamma=2.0, ignore_index=0).to(self.device)
         # loss as dataparallel too (more images in batch)
         if self.n_gpus > 1:
             self.criterion = nn.DataParallel(self.criterion).cuda()
+            self.boundary = nn.DataParallel(self.boundary).cuda()
             self.lovasz = nn.DataParallel(self.lovasz).cuda()
-            self.focal = nn.DataParallel(self.focal).cuda()
+            #self.focal = nn.DataParallel(self.focal).cuda()
 
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-3, weight_decay=0.05, eps=1e-8)
-        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=0.01, steps_per_epoch=len(self.parser.get_train_set()), epochs=self.ARCH['train']['epochs'], pct_start=0.02)
-        #self.scheduler = CosineAnnealingWarmUpRestarts(self.optimizer,
-        #                                               T_0=self.ARCH['train']['epochs'] * self.parser.get_train_size(),
-        #                                               T_mult=1,
-        #                                               eta_max=0.01,
-        #                                               T_up=1,
-        #                                               gamma=1.0)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-4, weight_decay=0.05, eps=1e-8)
+        #self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=0.01, steps_per_epoch=len(self.parser.get_train_set()), epochs=self.ARCH['train']['epochs'], pct_start=0.02)
+        self.scheduler = CosineAnnealingWarmUpRestarts(self.optimizer,
+                                                       T_0=self.ARCH['train']['epochs'] * self.parser.get_train_size() // 4,
+                                                       T_mult=1,
+                                                       eta_max=0.01,
+                                                       T_up=1,
+                                                       gamma=1.0)
 
         print(f'Optimizer: {self.optimizer}')
         print(f'Scheduler: {self.scheduler}')
@@ -209,22 +210,20 @@ class Trainer():
             predictions = outputs[0].permute(0, 3, 1, 2)
 
             # compute loss
-            #ce_loss = criterion(predictions, proj_labels)
+            ce_loss = criterion(predictions, proj_labels)
             bd_loss = self.boundary(F.softmax(predictions, dim=1), proj_labels)
             lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels)
-            focal_loss = self.focal(predictions, proj_labels)
+            #focal_loss = self.focal(predictions, proj_labels)
 
-            #loss = ce_loss + focal_loss + lovasz_loss
-            loss = bd_loss + focal_loss + lovasz_loss
+            loss = ce_loss + bd_loss + lovasz_loss
 
             for j in range(1, len(outputs)):
-                #cl = criterion(outputs[j], proj_labels)
+                cl = criterion(outputs[j], proj_labels)
                 bd = self.boundary(F.softmax(outputs[j], dim=1), proj_labels)
                 ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels)
-                fl = self.focal(outputs[j], proj_labels)
+                #fl = self.focal(outputs[j], proj_labels)
 
-                #loss += 0.5 * (cl + ll + fl)
-                loss += 0.5 * (bd + ll + fl)
+                loss += 0.5 * (cl + bd + ll)
 
             loss.backward()
 
@@ -268,23 +267,20 @@ class Trainer():
                 predictions = outputs[0].permute(0, 3, 1, 2)
 
                 # compute loss
-                # TODO use predictions from each stage ?
-                #ce_loss = criterion(predictions, proj_labels)
+                ce_loss = criterion(predictions, proj_labels)
                 bd_loss = self.boundary(F.softmax(predictions, dim=1), proj_labels)
                 lovasz_loss = self.lovasz(F.softmax(predictions, dim=1), proj_labels)
-                focal_loss = self.focal(predictions, proj_labels)
+                #focal_loss = self.focal(predictions, proj_labels)
 
-                #loss = ce_loss + focal_loss + lovasz_loss
-                loss = bd_loss + focal_loss + lovasz_loss
+                loss = ce_loss + bd_loss + lovasz_loss
 
                 for j in range(1, len(outputs)):
-                    #cl = criterion(outputs[j], proj_labels)
+                    cl = criterion(outputs[j], proj_labels)
                     bd = self.boundary(F.softmax(outputs[j], dim=1), proj_labels)
                     ll = self.lovasz(F.softmax(outputs[j], dim=1), proj_labels)
-                    fl = self.focal(outputs[j], proj_labels)
+                    #fl = self.focal(outputs[j], proj_labels)
 
-                    #loss += 0.5 * (cl + ll + fl)
-                    loss += 0.5 * (bd + ll + fl)
+                    loss += 0.5 * (cl + bd + ll)
 
                 argmax = predictions.argmax(dim=1)
                 evaluator.addBatch(argmax, proj_labels)
