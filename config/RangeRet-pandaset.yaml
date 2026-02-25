@@ -1,0 +1,89 @@
+# Config format schema number
+format_version: 1
+
+###################
+## Model options
+model_params:
+  model_architecture: "rangeret"
+
+  backbone: "retnet"        # [retnet, vit]
+
+  patch_size: [7, 7]        # size of patch
+  stride: [4, 4]            # stride (1 for full overlapping, patch_size for no overlapping)
+  pool: False               # average pool to extract patches
+
+  input_dim: 5              # range image features
+  base_dim: 128             # base stem dimension
+  dim: 128                  # hidden stem dimension
+
+  retnet:
+    layers: 8               # number of blocks per stage
+    model_dim: 128          # hidden retnet dimension
+    mlp_ratio: 2            # feed forward network dimension wrt dim
+    num_head: 4             # number of heads per layer
+    double_v_dim: True      # double v dimension wrt hidden_size
+  
+  decoder_dim: 64           # semantic head hidden dimension
+
+  drop: 0.3                 # drop path rate
+
+  post:                     # post processing
+    KNN:
+      use: True
+      params:
+        knn: 7
+        search: 7
+        sigma: 1.0 
+        cutoff: 1.0
+
+###################
+## Dataset options
+dataset:
+  pc_dataset_type: "PandaSet"
+  collate_type: "collate_fn_default"
+  ignore_label: 14
+  data_config: "./config/labels/pandaset.yaml"
+  num_classes: 15
+  max_points: 150000 # max of any scan in dataset
+  sensor:
+    name: "Pandar64"
+    type: "spherical" # projective
+    fov_up: 15
+    fov_down: -25 
+    img_prop:
+      width: 1024
+      height: 64
+    img_means: #range,x,y,z,signal
+      - 12.12
+      - 10.88
+      - 0.23
+      - -1.04
+      - 0.21
+    img_stds: #range,x,y,z,signal
+      - 12.32
+      - 11.47
+      - 6.91
+      - 0.86
+      - 0.16
+
+###################
+## Train params
+train:
+  epochs: 64 # default 64
+  learning_rate: 1.0e-2 # 1.0e-2 for SGD | 1.0e-4 for AdamW
+  weight_decay: 0.05
+  optimizer: AdamW  # [SGD, AdamW]
+  batch_size: 8   # batch size (default rangeret 8)
+  workers: 4     # number of threads to get data
+  epsilon_w: 0.001       # class weight w = 1 / (content + epsilon_w)
+  range_aug: False       # range image augmentations
+  
+  scheduler:
+    name: "WarmupCosine"  # [OneCycle, WarmupCosine]
+    #OneCycleLR: # Old decay with warmup and cosine annealing 
+    max_lr: 0.01 # Equal to optimizer.lr
+    total_steps: 1000 # Equal to max_epochs * iterations_per_epoch
+    pct_start: 0.02 # The percentage of the cycle (in number of steps) spent increasing the learning rate (warmup).
+
+  report_epoch: 1 # report every epoch
+  show_scans: False # show scans during training

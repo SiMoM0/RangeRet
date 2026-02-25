@@ -1,0 +1,23 @@
+# pycache
+__pycache__/
+
+# predicitons
+predictions/
+pred*
+test_predictions/
+
+# environment
+env/
+
+# profiler
+profiler*
+
+# logs
+log/
+logs/
+
+# model
+*.pt
+
+# checkpoints
+checkpoints/
