@@ -1,7 +1,7 @@
 <div align="center">
 <h1>Revisiting Retentive Networks for Fast Range-View 3D LiDAR Semantic Segmentation</h1>
 
-[**Simone Mosco**](https://simom0.github.io/), [**Daniel Fusaro**](https://bender97.github.io/danielfusaro.github.io/), [**Wanmeng Li**](https://lichonger2.github.io/),
+[**Simone Mosco**](https://simom0.github.io/), [**Daniel Fusaro**](https://bender97.github.io/), [**Wanmeng Li**](https://lichonger2.github.io/),
 [**Alberto Pretto**](https://albertopretto.altervista.org/)
 
 University of Padova
@@ -23,6 +23,7 @@ University of Padova
 **RangeRet** is a lightweight LiDAR semantic segmentation approach that adapts Retentive Networks to range images using a Circular Retention (CiR) mechanism to efficiently model spatial continuty properties of range-view representation. RangeRet obtains SOTA results among range-view approaches on PandaSet and SemanticPOSS, and competitive results on SemanticKITTI, while achieving real-time performance. 
 
 ## News
+- **2026-03-20**: Our paper [LIDO](https://simom0.github.io/lido_project/) on 3D LiDAR Anomaly Segmentation is accepted to CVPR 2026.
 - **2026-02-25**: Code and models are released.
 - **2025-09-05**: RangeRet is accepted to WACV 2026.
 
