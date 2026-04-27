@@ -23,8 +23,8 @@ University of Padova
 **RangeRet** is a lightweight LiDAR semantic segmentation approach that adapts Retentive Networks to range images using a Circular Retention (CiR) mechanism to efficiently model spatial continuty properties of range-view representation. RangeRet obtains SOTA results among range-view approaches on PandaSet and SemanticPOSS, and competitive results on SemanticKITTI, while achieving real-time performance. 
 
 ## News
-- **2026-03-20**: Our paper [LIDO](https://simom0.github.io/lido_project/) on 3D LiDAR Anomaly Segmentation is accepted to CVPR 2026.
 - **2026-02-25**: Code and models are released.
+- **2026-02-21**: Our paper [LIDO](https://simom0.github.io/lido-page/) on 3D LiDAR Anomaly Segmentation is accepted to CVPR 2026.
 - **2025-09-05**: RangeRet is accepted to WACV 2026.
 
 ## Installation
